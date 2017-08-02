@@ -4,7 +4,7 @@
 
 #define LAMP    (1 << 0)
 
-volatile uint8_t lamp_brightness = 0;
+volatile uint8_t lamp_brightness = 20;
 volatile uint32_t t = 0;
 
 int
@@ -12,24 +12,14 @@ main(void)
 {
 	DDRB |= LAMP;
 	
-	TCCR1 |= (1<<CS10);
+	TCCR1 |= (1<<CS13)|(1<<CS12)|(1<<CS11)|(1<<CS10);
 	TCNT1 = 0;
 	
 	while (1) {
-		if (TCNT1 > 200) {
-		if (PORTB & LAMP) {
-			PORTB &= ~LAMP;
-			TCNT1 = lamp_brightness;
-		} else {
+		if (TIFR & (1<<TOV1)) {
 			PORTB |= LAMP;
-			TCNT1 = 200 - lamp_brightness;
-		}
-		t++;
-		}
-		
-		if (t > 20000) {
-			lamp_brightness = lamp_brightness > 100 ? 20 : 180;
-			t = 0;
+		} else {
+			PORTB &= ~LAMP;
 		}
 	}
 }
