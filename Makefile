@@ -2,8 +2,10 @@ DEVICE = attiny85
 PROGRAMMER = usbtiny
 CLOCK = 1000000L
 
-CFLAGS = -Wall -O0 -mmcu=$(DEVICE) -DF_CPU=$(CLOCK)
-LDFLAGS =
+CFLAGS = -Wall -O0 
+CFLAGS += -mmcu=$(DEVICE) -DF_CPU=$(CLOCK)
+
+LDFLAGS = -nostartfile
 
 AVRDUDE = avrdude -c $(PROGRAMMER) -p $(DEVICE)
 CC = avr-gcc
