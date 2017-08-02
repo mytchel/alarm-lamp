@@ -9,7 +9,6 @@ LDFLAGS =
 
 AVRDUDE = avrdude -c $(PROGRAMMER) -p $(DEVICE)
 CC = avr-gcc
-LD = avr-ld
 OBJCOPY = avr-objcopy
 OBJDUMP = avr-objdump
 
@@ -27,11 +26,8 @@ all: out.hex out.list
 .elf.hex:
 	$(OBJCOPY) -j .text -j .data -O ihex $< $@
 	
-out.elf: $(SRC)
-	$(CC) -o out.elf $(CFLAGS) $(SRC) $(LDFLAGS)
-
-#$(OBJ)
-#	$(LD) -o out.elf $(OBJ) $(LDFLAGS)
+out.elf: $(OBJ)
+	$(CC) -o out.elf $(OBJ) $(LDFLAGS)
 
 
 flash: out.hex
