@@ -5,7 +5,7 @@ CLOCK = 1000000L
 CFLAGS = -Wall -O0 
 CFLAGS += -mmcu=$(DEVICE) -DF_CPU=$(CLOCK)
 
-LDFLAGS = -nostartfile
+LDFLAGS =
 
 AVRDUDE = avrdude -c $(PROGRAMMER) -p $(DEVICE)
 CC = avr-gcc
