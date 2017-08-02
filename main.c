@@ -2,40 +2,36 @@
 #include <avr/interrupt.h>
 #include <stdint.h>
 
-#define LAMP    (1 << PORTB0)
-#define BUTTON  (1 << 1)
+#define LAMP    (1 << 0)
 
-volatile uint8_t t;
+uint8_t lamp_brightness = 0;
+uint32_t t = 0;
 
-ISR(TIMER1_OVF_vect)
-{
-	t++;
-	
-	if (t > 250) {
-		if (PORTB & LAMP) {
-			PORTB &= ~LAMP;
-		} else {
-			PORTB |= LAMP;
-		}
-		
-		t = 0;
-	}
-}
-  
 int
 main(void)
 {
 	DDRB |= LAMP;
-	PORTB |= BUTTON;
-		
-	TCCR1 |= (1<<CS11);
-	TCNT1 = 0;
-	TIMSK |= (1<<TOIE1);
 	
-	sei();
+	TCCR1 |= (1<<CS13)|(1<<CS12)|(1<<CS10);
+	TCNT1 = 0;
 	
 	while (1) {
-	
+		if (TCNT1 > 200) {
+			if (PORTB & LAMP) {
+				PORTB &= ~LAMP;
+				TCNT1 = lamp_brightness;
+			} else {
+				PORTB |= LAMP;
+				TCNT1 = 200 - lamp_brightness;
+			}
+			
+			t++;
+		}
+		
+		if (t > 10) {
+			lamp_brightness = lamp_brightness > 100 ? 20 : 180;
+			t = 0;
+		}
 	}
 }
 

@@ -2,7 +2,7 @@ DEVICE = attiny85
 PROGRAMMER = usbtiny
 CLOCK = 1000000L
 
-CFLAGS = -Wall -mmcu=$(DEVICE) -DF_CPU=$(CLOCK)
+CFLAGS = -Wall -O0 -mmcu=$(DEVICE) -DF_CPU=$(CLOCK)
 LDFLAGS =
 
 AVRDUDE = avrdude -c $(PROGRAMMER) -p $(DEVICE)
@@ -33,4 +33,4 @@ flash: out.hex
 	$(AVRDUDE) -U flash:w:out.hex:i
 
 clean: 
-	rm -f out.elf out.hex $(OBJ)
+	rm -f *.elf *.hex *.list $(OBJ)
