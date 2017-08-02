@@ -5,7 +5,7 @@ CLOCK = 1000000L
 CFLAGS = -Wall -O0 
 CFLAGS += -mmcu=$(DEVICE) -DF_CPU=$(CLOCK)
 
-LDFLAGS =
+LDFLAGS = 
 
 AVRDUDE = avrdude -c $(PROGRAMMER) -p $(DEVICE)
 CC = avr-gcc
@@ -22,13 +22,16 @@ OBJ = $(SRC:%.c=%.o)
 all: out.hex out.list
 
 .elf.list:
-	$(OBJDUMP) -S $< > $@
+	$(OBJDUMP) -j .text -j .data -S $< > $@
 
 .elf.hex:
 	$(OBJCOPY) -j .text -j .data -O ihex $< $@
 	
-out.elf: $(OBJ)
-	$(LD) -o out.elf $(OBJ) $(LDFLAGS)
+out.elf: $(SRC)
+	$(CC) -o out.elf $(CFLAGS) $(SRC) $(LDFLAGS)
+
+#$(OBJ)
+#	$(LD) -o out.elf $(OBJ) $(LDFLAGS)
 
 
 flash: out.hex
