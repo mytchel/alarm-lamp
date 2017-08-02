@@ -3,17 +3,38 @@
 #include <stdint.h>
 
 #define LAMP    (1 << 0)
+#define lamp_brightness OCR1A
 
-uint32_t t = 0;
+/* In roughly seconds. */
+volatile uint64_t time = 0;
 
 ISR(TIMER1_OVF_vect)
 {
-	PORTB |= LAMP;
+	if (OCR1A > 0) {
+		PORTB |= LAMP;
+	} else {
+		PORTB &= ~LAMP;
+	}
 }
 
 ISR(TIMER1_COMPA_vect)
 {
-	PORTB &= ~LAMP;
+	if (OCR1A < 0xff) {
+		PORTB &= ~LAMP;
+	} else {
+		PORTB |= LAMP;
+	}
+}
+
+ISR(TIMER0_COMPA_vect)
+{
+	static uint8_t t = 0;
+	
+	TCNT0 = 0;
+	if (t++ == 4) {
+		time++;
+		t = 0;
+	}
 }
 
 int
@@ -21,24 +42,23 @@ main(void)
 {
 	DDRB |= LAMP;
 	
-	TCCR1 |= (1<<CS10);
-	TIMSK = (1<<TOIE1)|(1<<OCIE1A);
+	TCCR1 |= (1<<CS11);
 	TCNT1 = 0;
-	OCR1A = 200;
+	lamp_brightness = 200;
 	
-	TCCR0B |= (1<<CS01)|(1<<CS00);
+	TIMSK |= (1<<TOIE1)|(1<<OCIE1A);
+	
+	TCCR0B |= (1<<CS02)|(1<<CS00);
 	TCNT0 = 0;
+	OCR0A = 244;
+	TIMSK |= (1<<OCIE0A);
 	
+	uint64_t t = 0;
 	sei();
 	while (1) {
-		if (TCNT0 > 200) {
-			TCNT0 = 0;
-			t++;
-		}
-		
-		if (t > 200) {
-			OCR1A = OCR1A > 100 ? 10 : 240;
-			t = 0;
+		if (time != t) {
+			t = time;
+			lamp_brightness = lamp_brightness ? 0 : 255;
 		}
 	}
 }
