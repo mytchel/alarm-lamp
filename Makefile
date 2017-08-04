@@ -1,6 +1,7 @@
 DEVICE = attiny85
 PROGRAMMER = usbtiny
-CLOCK = 1000000L
+# 6MHz with external crystal.
+CLOCK = 6000000L
 
 CFLAGS = -Wall -O0 
 CFLAGS += -mmcu=$(DEVICE) -DF_CPU=$(CLOCK)
