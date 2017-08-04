@@ -87,9 +87,9 @@ action_fade(void)
 }
 
 /* Length of alarm in minutes. */
-#define ALARM_LEN 1
+#define ALARM_LEN 30
 
-volatile uint32_t alarm = 30;//0xffffffff;
+volatile uint32_t alarm = 60 * 60 * 7;//0xffffffff;
 volatile uint32_t prev_alarm = 0;
 
 void
@@ -99,7 +99,7 @@ start_alarm(void)
 	
 	prev_alarm = time_s;
 	
-	alarm += 60 * 60 * 24;
+	alarm += 60UL * 60UL * 24UL;
 	
 	set_lamp_brightness(0xff);
 }
@@ -156,6 +156,31 @@ init_timers(void)
 	TIMSK |= (1<<OCIE0A);
 }
 
+void
+button_push(void)
+{
+	switch (action) {
+	case ACTION_none:
+		start_fade(10);
+		break;
+		
+	case ACTION_fade:
+		start_fade(10);
+		break;
+		
+	case ACTION_set_time:
+		break;
+		
+	case ACTION_set_alarm:
+		break;
+		
+	case ACTION_alarm:
+		action = ACTION_none;
+		set_lamp_brightness(0);
+		break;
+	}
+}
+
 int
 main(void)
 {
@@ -169,7 +194,7 @@ main(void)
 	sei();
 	while (1) {
 		if (!(PINB & BUTTON) && TCNT0 == 0) {
-			start_fade(10);
+			button_push();
 		}
 	}
 }
