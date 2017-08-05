@@ -26,7 +26,7 @@ volatile bool button_down = false;
 /* Order of parts matters, otherwise the operation is not
  * done right due to 32bit limit. I think. */
 #define TIMER1_OVF_period \
-    (((SEC_MICRO * 128UL) / F_CPU) * 256UL)
+    (((SEC_MICRO * 256UL) / F_CPU) * 256UL)
 
 
 typedef enum {
@@ -42,11 +42,14 @@ void
 init_timers(void)
 {
 	TCCR1 |= (1<<CS13);
-	TCNT1 = 0;
-	TIMSK |= (1<<TOIE1)|(1<<OCIE1A);
+		
+	TCCR0B |= (1<<CS02)|(1<<CS00);
+	TCNT0 = 0;
+	
+	TIMSK |= (1<<TOIE0);
 }
 
-ISR(TIMER1_OVF_vect)
+ISR(TIMER0_OVF_vect)
 {
 	static uint32_t button_count = 0;
 	
@@ -69,27 +72,38 @@ ISR(TIMER1_OVF_vect)
 	} else {
 		button_count = 0;
 	}
-	
-	if (OCR1A > 0) {
-		PORTB |= LAMP;
-	} else {
-		PORTB &= ~LAMP;
-	}
+}
+
+ISR(TIMER1_OVF_vect)
+{
+	PORTB |= LAMP;
 }
 
 ISR(TIMER1_COMPA_vect)
 {
-	if (OCR1A < 0xff) {
-		PORTB &= ~LAMP;
-	} else {
-		PORTB |= LAMP;
-	}
+	PORTB &= ~LAMP;
 }
 
 void
 set_lamp_brightness(uint8_t b)
 {
+	uint8_t mask = TIMSK;
+	
+	if (b == 0) {
+		PORTB &= ~LAMP;
+		mask &= ~((1<<TOIE1)|(1<<OCIE1A));
+		
+	} else if (b == 0xff) {
+		PORTB |= LAMP;
+		mask &= ~((1<<TOIE1)|(1<<OCIE1A));
+		
+	} else {
+		TCNT1 = 0;
+		mask |= (1<<TOIE1)|(1<<OCIE1A);
+	}
+	
 	OCR1A = b;
+	TIMSK = mask;
 }
 
 uint8_t
@@ -325,7 +339,6 @@ main(void)
 	init_timers();
 	
 	sei();
-	
 	s = STATE_fade;
 	while (true) {
 		s = states[s]();
