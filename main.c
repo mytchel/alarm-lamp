@@ -8,7 +8,7 @@
 #define BUTTON    (1 << 1)
 
 /* Time in seconds that fade should have the lamp full. */
-#define FADE_FULL_TIME  1
+#define FADE_FULL_TIME  30
 
 volatile uint32_t time_u = 0;
 volatile uint32_t time_s = 0;
@@ -25,7 +25,7 @@ volatile bool button_down = false;
 
 /* Order of parts matters, otherwise the operation is not
  * done right due to 32bit limit. I think. */
-#define TIMER1_OVF_period \
+#define TIMER0_OVF_period \
     (((SEC_MICRO * 256UL) / F_CPU) * 256UL)
 
 
@@ -43,7 +43,7 @@ init_timers(void)
 {
 	TCCR1 |= (1<<CS13);
 		
-	TCCR0B |= (1<<CS02)|(1<<CS00);
+	TCCR0B |= (1<<CS02);
 	TCNT0 = 0;
 	
 	TIMSK |= (1<<TOIE0);
@@ -54,7 +54,7 @@ ISR(TIMER0_OVF_vect)
 	static uint32_t button_count = 0;
 	
 	/* Time keeping. */
-	time_u += TIMER1_OVF_period;
+	time_u += TIMER0_OVF_period;
 	if (time_u >= SEC_MICRO) {
 		time_s++;
 		time_u -= SEC_MICRO;
@@ -74,9 +74,12 @@ ISR(TIMER0_OVF_vect)
 	}
 }
 
+volatile uint8_t lamp_brightness = 0;
+
 ISR(TIMER1_OVF_vect)
 {
 	PORTB |= LAMP;
+	OCR1A = lamp_brightness;
 }
 
 ISR(TIMER1_COMPA_vect)
@@ -87,29 +90,25 @@ ISR(TIMER1_COMPA_vect)
 void
 set_lamp_brightness(uint8_t b)
 {
-	uint8_t mask = TIMSK;
+	lamp_brightness = b;
 	
 	if (b == 0) {
 		PORTB &= ~LAMP;
-		mask &= ~((1<<TOIE1)|(1<<OCIE1A));
+		TIMSK &= ~((1<<TOIE1)|(1<<OCIE1A));
 		
 	} else if (b == 0xff) {
 		PORTB |= LAMP;
-		mask &= ~((1<<TOIE1)|(1<<OCIE1A));
+		TIMSK &= ~((1<<TOIE1)|(1<<OCIE1A));
 		
 	} else {
-		TCNT1 = 0;
-		mask |= (1<<TOIE1)|(1<<OCIE1A);
+		TIMSK |= (1<<TOIE1)|(1<<OCIE1A);
 	}
-	
-	OCR1A = b;
-	TIMSK = mask;
 }
 
 uint8_t
 get_lamp_brightness(void)
 {
-	return OCR1A;
+	return lamp_brightness;
 }
 
 uint32_t

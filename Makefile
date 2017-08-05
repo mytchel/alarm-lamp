@@ -3,7 +3,7 @@ PROGRAMMER = usbtiny
 # 6MHz with external crystal
 CLOCK = 6000000UL
 
-CFLAGS = -Wall -O0 
+CFLAGS = -Wall -Os
 CFLAGS += -mmcu=$(DEVICE) -DF_CPU=$(CLOCK)
 
 LDFLAGS = 
