@@ -1,30 +1,73 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #define LAMP      (1 << 0)
 
 #define BUTTON    (1 << 1)
 
-typedef enum {
-	ACTION_none,
-	ACTION_fade,
-	ACTION_set_time,
-	ACTION_set_alarm,
-	ACTION_alarm,
-} action_t;
+/* Time in seconds that fade should have the lamp full. */
+#define FADE_FULL_TIME  1
 
-volatile uint32_t time_n = 0;
+volatile uint32_t time_u = 0;
 volatile uint32_t time_s = 0;
 
-volatile action_t action = ACTION_none;
+/* Time lamp should stay on for alarm in minutes.
+ * Due to uint32_t constraint on times this can be
+ * no longer than 70 minutes. */
+#define ALARM_LENGTH  30
+uint32_t alarm = 0xffffffff;
+
+volatile bool button_down = false;
+
+#define SEC_MICRO 1000000UL
+
+/* Order of parts matters, otherwise the operation is not
+ * done right due to 32bit limit. I think. */
+#define TIMER1_OVF_period \
+    (((SEC_MICRO * 128UL) / F_CPU) * 256UL)
+
+
+typedef enum {
+	STATE_wait,
+	STATE_alarm,
+	STATE_fade,
+	STATE_set_alarm,
+	STATE_set_time,
+	STATE_button_down,
+} state_t;
+
+void
+init_timers(void)
+{
+	TCCR1 |= (1<<CS13);
+	TCNT1 = 0;
+	TIMSK |= (1<<TOIE1)|(1<<OCIE1A);
+}
 
 ISR(TIMER1_OVF_vect)
 {
-	time_n += 42667;
-	if (time_n >= 1000000000L) {
+	static uint32_t button_count = 0;
+	
+	/* Time keeping. */
+	time_u += TIMER1_OVF_period;
+	if (time_u >= SEC_MICRO) {
 		time_s++;
-		time_n -= 1000000000L;
+		time_u -= SEC_MICRO;
+	}
+	
+	/* Button debouncing. */
+	if ((PINB & BUTTON) && button_down) {
+		if (button_count++ == 3) {
+			button_down = false;
+		}
+	} else if ((PINB & BUTTON) == 0 && !button_down) {
+		if (button_count++ == 3) {
+			button_down = true;
+		}
+	} else {
+		button_count = 0;
 	}
 	
 	if (OCR1A > 0) {
@@ -55,146 +98,236 @@ get_lamp_brightness(void)
 	return OCR1A;
 }
 
-volatile uint32_t fade_state;
-
-void
-start_fade(uint64_t seconds_full)
+uint32_t
+time_diff(uint32_t ts_u, uint32_t ts_s,
+          uint32_t te_u, uint32_t te_s)
 {
-	action = ACTION_fade;
-	
-	fade_state = seconds_full * 40;
-	set_lamp_brightness(0xff);
+	return (te_s - ts_s) * SEC_MICRO + (te_u - ts_u);
 }
 
-void
-action_fade(void)
+state_t
+state_fade(void)
 {
-	if (fade_state > 0) {
-		fade_state--;
-		return;
-	}
+	uint32_t ts_u, ts_s, t, lt;
 	
-	if (get_lamp_brightness() > 1) {
-		/* Fade away. */
-		set_lamp_brightness(get_lamp_brightness() - 1);
-		
-	} else {
-		/* Stop fade. */
-		fade_state = 0;
-		set_lamp_brightness(0);
-		action = ACTION_none;
-	}
-}
-
-/* Length of alarm in minutes. */
-#define ALARM_LEN 30
-
-volatile uint32_t alarm = 60 * 60 * 7;//0xffffffff;
-volatile uint32_t prev_alarm = 0;
-
-void
-start_alarm(void)
-{
-	action = ACTION_alarm;
-	
-	prev_alarm = time_s;
-	
-	alarm += 60UL * 60UL * 24UL;
+	ts_u = time_u;
+	ts_s = time_s;
 	
 	set_lamp_brightness(0xff);
-}
-
-void
-action_alarm(void)
-{
-	if (time_s > prev_alarm + 60 * ALARM_LEN) {
-		/* Fade out. */
-		start_fade(0);
-	}
-}
-
-ISR(TIMER0_COMPA_vect)
-{
-	TCNT0 = 0;
 	
-	switch (action) {
-	case ACTION_none:
-		if (time_s > alarm) {
-			start_alarm();
+	/* Full for some time. */
+	do {
+		if (button_down) {
+			return STATE_button_down;
 		}
-		break;
 		
-	case ACTION_fade:
-		action_fade();
-		break;
-		
-	case ACTION_set_time:
-		break;
-		
-	case ACTION_set_alarm:
-		break;
-		
-	case ACTION_alarm:
-		action_alarm();
-		break;
-	}
-}
-
-void
-init_timers(void)
-{
-	/* Timer1 wants to go as fast as possible. */
-	TCCR1 |= (1<<CS10);
-	TCNT1 = 0;
-	TIMSK |= (1<<TOIE1)|(1<<OCIE1A);
+		t = time_diff(ts_u, ts_s, time_u, time_s);
+	} while (t < FADE_FULL_TIME * SEC_MICRO);
 	
-	/* Timer0 wants to be relitively slow. Diviser is 1024. */
-	TCCR0B |= (1<<CS02)|(1<<CS00);
-	TCNT0 = 0;
-	/* Compare value to make it interrupt every 25ms. */
-	OCR0A = F_CPU / 1024 / 40;
-	TIMSK |= (1<<OCIE0A);
+	/* Fade away. */
+	
+	lt = 0;
+	while (get_lamp_brightness() > 0) {
+		if (button_down) {
+			return STATE_button_down;
+		}
+		
+		t = time_diff(ts_u, ts_s, time_u, time_s);
+		if (t > lt) {
+			lt = t + SEC_MICRO / 128;
+			set_lamp_brightness(get_lamp_brightness() - 1);
+		}
+	}
+	
+	return STATE_wait;
 }
 
-void
-button_push(void)
+state_t
+state_alarm(void)
 {
-	switch (action) {
-	case ACTION_none:
-		start_fade(10);
-		break;
+	uint32_t ts_u, ts_s, t, lt;
+	
+	ts_u = time_u;
+	ts_s = time_s;
+	
+	set_lamp_brightness(0);
+	
+	/* Fade on. */
+	
+	lt = 0;
+	while (get_lamp_brightness() < 0xff) {
+		if (button_down) {
+			return STATE_button_down;
+		}
 		
-	case ACTION_fade:
-		start_fade(10);
-		break;
+		t = time_diff(ts_u, ts_s, time_u, time_s);
+		if (t > lt) {
+			lt = t + SEC_MICRO;
+			set_lamp_brightness(get_lamp_brightness() + 1);
+		}
+	}
+	
+	/* Full for some time. */
+	do {
+		if (button_down) {
+			return STATE_button_down;
+		}
 		
-	case ACTION_set_time:
-		break;
+		t = time_diff(ts_u, ts_s, time_u, time_s);
+	} while (t < ALARM_LENGTH * 60 * SEC_MICRO);
+	
+	/* Fade off. */
+	
+	lt = 0;
+	while (get_lamp_brightness() > 0) {
+		if (button_down) {
+			return STATE_button_down;
+		}
 		
-	case ACTION_set_alarm:
-		break;
+		t = time_diff(ts_u, ts_s, time_u, time_s);
+		if (t > lt) {
+			lt = t + SEC_MICRO;
+			set_lamp_brightness(get_lamp_brightness() - 1);
+		}
+	}
 		
-	case ACTION_alarm:
-		action = ACTION_none;
+	return STATE_wait;
+}
+
+state_t
+state_set_alarm(void)
+{
+	set_lamp_brightness(0);
+	
+	alarm = time_s + 20;
+	
+	return STATE_wait;
+}
+
+state_t
+state_set_time(void)
+{
+	set_lamp_brightness(0);
+	return STATE_wait;
+}
+
+state_t
+state_button_down(void)
+{
+	uint32_t ts_u, ts_s, t, lt;
+	
+	t = 0;
+	ts_u = time_u;
+	ts_s = time_s;
+	
+	/* Do nothing. */
+	do {
+		if (!button_down) {
+			return STATE_wait;
+		}	
+	
+		t = time_diff(ts_u, ts_s, time_u, time_s);
+	} while (t <= 0.1 * SEC_MICRO);
+	
+	/* Goto fade. */
+	set_lamp_brightness(0xff);
+	do {
+		if (!button_down) {
+			return STATE_fade;
+		}
+		
+		t = time_diff(ts_u, ts_s, time_u, time_s);
+	} while (t <= 1 * SEC_MICRO);
+	
+	/* Cancel. */
+	set_lamp_brightness(0);
+	do {
+		if (!button_down) {
+			return STATE_wait;
+		}
+		
+		t = time_diff(ts_u, ts_s, time_u, time_s);
+	} while (t <= 2 * SEC_MICRO);
+	
+	/* Set alarm. */
+	lt = 0;
+	do {
+		if (t > lt) {
+			lt = t + SEC_MICRO / 4;
+			set_lamp_brightness(
+			    get_lamp_brightness() > 0 ? 0 : 0xff);
+		}
+	
+		if (!button_down) {
+			return STATE_set_alarm;
+		}
+		
+		t = time_diff(ts_u, ts_s, time_u, time_s);
+	} while (t <= 4 * SEC_MICRO);
+	
+	/* Set time. */
+	lt = 0;
+	do {
+		if (t > lt) {
+			lt = t + SEC_MICRO / 8;
+			set_lamp_brightness(
+			    get_lamp_brightness() > 0 ? 0 : 0xff);
+		}
+	
+		if (!button_down) {
+			return STATE_set_time;
+		}
+		
+		t = time_diff(ts_u, ts_s, time_u, time_s);
+	} while (t <= 6 * SEC_MICRO);
+	
+	/* Cancel. */
+	set_lamp_brightness(0);
+	while (button_down)
+		;
+	
+	return STATE_wait;
+}
+
+state_t
+state_wait(void)
+{
+	if (time_s > alarm) {
+		return STATE_alarm;
+		
+	} else if (button_down) {
+		return STATE_button_down;
+	
+	} else {
 		set_lamp_brightness(0);
-		break;
+	
+		return STATE_wait;
 	}
 }
+
+state_t ((*states[])(void)) = {
+	[STATE_wait]        = state_wait,
+	[STATE_alarm]       = state_alarm,
+	[STATE_fade]        = state_fade,
+	[STATE_set_alarm]   = state_set_alarm,
+	[STATE_set_time]    = state_set_time,
+	[STATE_button_down] = state_button_down,
+};
 
 int
 main(void)
 {
+	state_t s;
+	
 	DDRB |= LAMP;
 	PORTB |= BUTTON;
 	
 	init_timers();
 	
-	start_fade(1);
-	
 	sei();
-	while (1) {
-		if (!(PINB & BUTTON) && TCNT0 == 0) {
-			button_push();
-		}
+	
+	s = STATE_fade;
+	while (true) {
+		s = states[s]();
 	}
 }
