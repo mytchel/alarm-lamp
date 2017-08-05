@@ -324,11 +324,11 @@ get_hour_minutes_button_down(int rate)
 }
 
 bool
-get_hour_minutes(uint8_t *hour, uint8_t *minute, uint8_t rate)
+get_hour_minutes_value(uint8_t *v, uint8_t rate, bool ishour)
 {
 	uint32_t ts_u, ts_s, t, lt;
 	
-	*hour = 0;
+	*v = 0;
 	ts_u = time_u;
 	ts_s = time_s;
 	lt = 0;
@@ -337,45 +337,7 @@ get_hour_minutes(uint8_t *hour, uint8_t *minute, uint8_t rate)
 		if (button_down) {
 			switch (get_hour_minutes_button_down(rate)) {
 			case 0:
-				*hour = (*hour + 1) % 24;
-				/* Update display */
-				break;
-			case 1:
-				goto get_minutes;
-			case 2:
-				return false;
-			}
-			
-			ts_u = time_u;
-			ts_s = time_s;
-			lt = 0;
-		}
-		
-		t = time_diff(ts_u, ts_s, time_u, time_s);
-		if (t > lt) {
-			lt = t + SEC_MICRO / rate;
-			
-			/* Should flash display instead of lamp. */
-			set_lamp_brightness(
-			    get_lamp_brightness() > 0 ? 0 : 0xff);
-			    
-		} else if (t > 60 * SEC_MICRO) {
-			return false;
-		}
-	}
-	
-	get_minutes:
-	*minute = 0;
-	ts_u = time_u;
-	ts_s = time_s;
-	lt = 0;
-	
-	while (true) {
-		if (button_down) {
-			switch (get_hour_minutes_button_down(rate)) {
-			case 0:
-				*minute = (*minute + 1) % 60;
-				/* Update display */
+				*v = (*v + 1) % (ishour ? 24 : 60);
 				break;
 			case 1:
 				return true;
@@ -392,7 +354,8 @@ get_hour_minutes(uint8_t *hour, uint8_t *minute, uint8_t rate)
 		if (t > lt) {
 			lt = t + SEC_MICRO / rate;
 			
-			/* Should flash display instead of lamp. */
+			/* Should flash display instead of lamp.
+			 * Either high two if hour is true or low two. */
 			set_lamp_brightness(
 			    get_lamp_brightness() > 0 ? 0 : 0xff);
 			    
@@ -400,6 +363,16 @@ get_hour_minutes(uint8_t *hour, uint8_t *minute, uint8_t rate)
 			return false;
 		}
 	}
+}
+
+bool
+get_hour_minutes(uint8_t *hour, uint8_t *minute, uint8_t rate)
+{
+	if (!get_hour_minutes_value(hour, rate, true)) {
+		return false;
+	}
+	
+	return get_hour_minutes_value(minute, rate, false);
 }
 
 state_t
