@@ -4,7 +4,6 @@
 #include <stdbool.h>
 
 #define LAMP      (1 << 0)
-
 #define BUTTON    (1 << 1)
 
 /* Time in seconds that fade should have the lamp full. */
@@ -19,6 +18,7 @@ volatile uint32_t time_s = 0;
 #define ALARM_LENGTH  30
 uint32_t alarm = 0xffffffff;
 
+/* Debounced button signal. */
 volatile bool button_down = false;
 
 #define SEC_MICRO 1000000UL
@@ -162,7 +162,7 @@ state_alarm(void)
 	
 	ts_u = time_u;
 	ts_s = time_s;
-	
+		
 	set_lamp_brightness(0);
 	
 	/* Fade on. */
@@ -208,23 +208,6 @@ state_alarm(void)
 }
 
 state_t
-state_set_alarm(void)
-{
-	set_lamp_brightness(0);
-	
-	alarm = time_s + 20;
-	
-	return STATE_wait;
-}
-
-state_t
-state_set_time(void)
-{
-	set_lamp_brightness(0);
-	return STATE_wait;
-}
-
-state_t
 state_button_down(void)
 {
 	uint32_t ts_u, ts_s, t, lt;
@@ -232,16 +215,7 @@ state_button_down(void)
 	t = 0;
 	ts_u = time_u;
 	ts_s = time_s;
-	
-	/* Do nothing. */
-	do {
-		if (!button_down) {
-			return STATE_wait;
-		}	
-	
-		t = time_diff(ts_u, ts_s, time_u, time_s);
-	} while (t <= 0.1 * SEC_MICRO);
-	
+		
 	/* Goto fade. */
 	set_lamp_brightness(0xff);
 	do {
@@ -250,7 +224,7 @@ state_button_down(void)
 		}
 		
 		t = time_diff(ts_u, ts_s, time_u, time_s);
-	} while (t <= 1 * SEC_MICRO);
+	} while (t < 1 * SEC_MICRO);
 	
 	/* Cancel. */
 	set_lamp_brightness(0);
@@ -260,7 +234,7 @@ state_button_down(void)
 		}
 		
 		t = time_diff(ts_u, ts_s, time_u, time_s);
-	} while (t <= 2 * SEC_MICRO);
+	} while (t < 2 * SEC_MICRO);
 	
 	/* Set alarm. */
 	lt = 0;
@@ -276,7 +250,7 @@ state_button_down(void)
 		}
 		
 		t = time_diff(ts_u, ts_s, time_u, time_s);
-	} while (t <= 4 * SEC_MICRO);
+	} while (t < 4 * SEC_MICRO);
 	
 	/* Set time. */
 	lt = 0;
@@ -292,7 +266,7 @@ state_button_down(void)
 		}
 		
 		t = time_diff(ts_u, ts_s, time_u, time_s);
-	} while (t <= 6 * SEC_MICRO);
+	} while (t < 6 * SEC_MICRO);
 	
 	/* Cancel. */
 	set_lamp_brightness(0);
@@ -302,10 +276,160 @@ state_button_down(void)
 	return STATE_wait;
 }
 
+int
+get_hour_minutes_button_down(int rate)
+{
+	uint32_t ts_u, ts_s, t, lt;
+	
+	ts_u = time_u;
+	ts_s = time_s;
+	lt = 0;
+	
+	/* Short. */
+	do {
+		if (!button_down) {
+			return 0;
+		}
+		
+		t = time_diff(ts_u, ts_s, time_u, time_s);
+		
+		if (t > lt) {
+			lt = t + SEC_MICRO / rate;
+			
+			/* Should flash display instead of lamp. */
+			set_lamp_brightness(
+			    get_lamp_brightness() > 0 ? 0 : 0xff);
+		}
+	} while (t < 1 * SEC_MICRO);
+	
+	/* Should set display to full on. */
+	set_lamp_brightness(0xff);
+	
+	/* Long. */
+	do {
+		if (!button_down) {
+			return 1;
+		}
+		
+		t = time_diff(ts_u, ts_s, time_u, time_s);
+	} while (t < 5 * SEC_MICRO);
+	
+	/* Cancel */
+	
+	set_lamp_brightness(0);
+	while (button_down)
+		;
+	
+	return 2;
+}
+
+bool
+get_hour_minutes(uint8_t *hour, uint8_t *minute, uint8_t rate)
+{
+	uint32_t ts_u, ts_s, t, lt;
+	
+	*hour = 0;
+	ts_u = time_u;
+	ts_s = time_s;
+	lt = 0;
+	
+	while (true) {
+		if (button_down) {
+			switch (get_hour_minutes_button_down(rate)) {
+			case 0:
+				*hour = (*hour + 1) % 24;
+				/* Update display */
+				break;
+			case 1:
+				goto get_minutes;
+			case 2:
+				return false;
+			}
+			
+			ts_u = time_u;
+			ts_s = time_s;
+			lt = 0;
+		}
+		
+		t = time_diff(ts_u, ts_s, time_u, time_s);
+		if (t > lt) {
+			lt = t + SEC_MICRO / rate;
+			
+			/* Should flash display instead of lamp. */
+			set_lamp_brightness(
+			    get_lamp_brightness() > 0 ? 0 : 0xff);
+			    
+		} else if (t > 60 * SEC_MICRO) {
+			return false;
+		}
+	}
+	
+	get_minutes:
+	*minute = 0;
+	ts_u = time_u;
+	ts_s = time_s;
+	lt = 0;
+	
+	while (true) {
+		if (button_down) {
+			switch (get_hour_minutes_button_down(rate)) {
+			case 0:
+				*minute = (*minute + 1) % 60;
+				/* Update display */
+				break;
+			case 1:
+				return true;
+			case 2:
+				return false;
+			}
+			
+			ts_u = time_u;
+			ts_s = time_s;
+			lt = 0;
+		}
+		
+		t = time_diff(ts_u, ts_s, time_u, time_s);
+		if (t > lt) {
+			lt = t + SEC_MICRO / rate;
+			
+			/* Should flash display instead of lamp. */
+			set_lamp_brightness(
+			    get_lamp_brightness() > 0 ? 0 : 0xff);
+			    
+		} else if (t > 60 * SEC_MICRO) {
+			return false;
+		}
+	}
+}
+
+state_t
+state_set_alarm(void)
+{
+	uint8_t hour, minute;
+	
+	if (get_hour_minutes(&hour, &minute, 4)) {
+		alarm = (hour * 60 + minute) * 60;
+	}
+	
+	return STATE_wait;
+}
+
+state_t
+state_set_time(void)
+{
+	uint8_t hour, minute;
+	
+	if (get_hour_minutes(&hour, &minute, 8)) {
+		time_s = (hour * 60 + minute) * 60;
+	}
+	
+	return STATE_wait;
+}
+
 state_t
 state_wait(void)
 {
-	if (time_s > alarm) {
+	if ((time_s % 86400UL) > alarm) {
 		return STATE_alarm;
 		
 	} else if (button_down) {
