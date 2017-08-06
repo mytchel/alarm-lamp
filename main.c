@@ -1,32 +1,36 @@
-#include <avr/io.h>
-#include <avr/interrupt.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <avr/io.h>
+#include <avr/interrupt.h>
 
 #define LAMP      (1 << 0)
 #define BUTTON    (1 << 1)
 
-/* Time in seconds that fade should have the lamp full. */
-#define FADE_FULL_TIME  30
-
-volatile uint32_t time_u = 0;
-volatile uint32_t time_s = 0;
-
-/* Time lamp should stay on for alarm in minutes.
- * Due to uint32_t constraint on times this can be
- * no longer than 70 minutes. */
-#define ALARM_LENGTH  30
-uint32_t alarm = 0xffffffff;
-
-/* Debounced button signal. */
-volatile bool button_down = false;
-
 #define SEC_MICRO 1000000UL
+#define DAY_SEC 86400UL
 
 /* Order of parts matters, otherwise the operation is not
  * done right due to 32bit limit. I think. */
 #define TIMER0_OVF_period \
     (((SEC_MICRO * 256UL) / F_CPU) * 256UL)
+    
+/* Time in seconds that fade should have the lamp full. */
+#define FADE_FULL_TIME  30
+
+volatile uint32_t time_u = 0;
+volatile uint32_t time_s = DAY_SEC;
+
+/* Time lamp should stay on for alarm in minutes.
+ * Due to uint32_t constraint on times this can be
+ * no longer than 70 minutes. */
+#define ALARM_LENGTH  30
+
+uint32_t alarm = ((12 * 60) + 30) * 60UL;
+uint32_t last_alarm = 0;
+
+/* Debounced button signal. */
+volatile bool button_down = false;
+
 
 
 typedef enum {
@@ -162,7 +166,9 @@ state_alarm(void)
 	
 	ts_u = time_u;
 	ts_s = time_s;
-		
+	
+	last_alarm = time_s;
+	
 	set_lamp_brightness(0);
 	
 	/* Fade on. */
@@ -215,7 +221,7 @@ state_button_down(void)
 	t = 0;
 	ts_u = time_u;
 	ts_s = time_s;
-		
+	
 	/* Goto fade. */
 	set_lamp_brightness(0xff);
 	do {
@@ -316,6 +322,7 @@ get_hour_minutes_button_down(int rate)
 	
 	/* Cancel */
 	
+	/* Should turn display off. */
 	set_lamp_brightness(0);
 	while (button_down)
 		;
@@ -402,7 +409,10 @@ state_set_time(void)
 state_t
 state_wait(void)
 {
-	if ((time_s % 86400UL) > alarm) {
+	/* Last alarm was at least 23 hours ago and it is
+	 * past alarm time. */ 
+	if (last_alarm + (DAY_SEC - 3600UL) < time_s &&
+	    (time_s % DAY_SEC) > alarm) {
 		return STATE_alarm;
 		
 	} else if (button_down) {
