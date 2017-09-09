@@ -3,8 +3,8 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#define LAMP      (1 << 0)
-#define BUTTON    (1 << 1)
+#define LAMP      (1 << 1)
+#define BUTTON    (1 << 4)
 
 #define SEC_MICRO 1000000UL
 #define DAY_SEC 86400UL
@@ -223,7 +223,7 @@ state_button_down(void)
 	lt = 0;
 	get_time(&s);
 	
-	/* Goto fade. */
+	/* Turn on. */
 	set_lamp_brightness(0xff);
 	do {
 		if (!button_down) {
