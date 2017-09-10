@@ -306,7 +306,7 @@ display_stop(void)
 }
 
 void
-display_draw(uint8_t a, uint8_t b, uint8_t c, uint8_t d)
+display_draw(bool sep, uint8_t a, uint8_t b, uint8_t c, uint8_t d)
 {	
 	display_start();
 	display_send_byte(0x40);
@@ -315,7 +315,7 @@ display_draw(uint8_t a, uint8_t b, uint8_t c, uint8_t d)
 	display_start();
 	display_send_byte(0xc0);
 	display_send_byte(segments[a & 0xf]);
-	display_send_byte(segments[b & 0xf]);
+	display_send_byte(segments[b & 0xf] | (sep ? 0x80 : 0));
 	display_send_byte(segments[c & 0xf]);
 	display_send_byte(segments[d & 0xf]);
 	display_stop();
@@ -684,8 +684,7 @@ main(void)
 		
 	uint8_t a, b, c, d;
 	int j;
-	
-		
+			
 	display_on();
 	i = 0;
 	while (true) {
@@ -697,8 +696,8 @@ main(void)
 		b = j % 16;
 		j /= 16;
 		a = j % 16;
-	
-		display_draw(a, b, c, d);
+		
+		display_draw(i % 2 == 0, a, b, c, d);
 		
 		if (i % 10 == 0) {
 			display_on();
