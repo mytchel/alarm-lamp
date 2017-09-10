@@ -3,11 +3,10 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#define LAMP      (1 << 0)
-
+#define LAMP      (1 << 1)
 #define BUTTON    (1 << 4)
-#define SDA       (1 << 0)
-#define SCL       (1 << 2)
+#define DIO       (1 << 0)
+#define DCK       (1 << 2)
 
 #define TM1637_comm1  0x40
 #define TM1637_comm2  0xc0
@@ -33,7 +32,6 @@ volatile bool button_down = false;
 
 volatile uint8_t lamp_brightness = 0;
 
-
 typedef enum {
 	STATE_wait,
 	STATE_alarm,
@@ -43,6 +41,10 @@ typedef enum {
 	STATE_button_down,
 	STATE_button_down_cancel,
 } state_t;
+
+
+void
+set_lamp_brightness(uint8_t b);
 
 void
 init_timers(void)
@@ -105,14 +107,19 @@ delay(uint32_t t)
 		;
 }
 
+
+#if 0
+/* The display is not i2c. I have no need of this
+   until I have got the display working. */
+   
 void
 init_i2c(void)
 {
-	PORTB |= (1<<SDA);
-	PORTB |= (1<<SCL);
+	PORTB |= SDA;
+	PORTB |= SCL;
 	
-	DDRB |= (1<<SDA);
-	DDRB |= (1<<SCL);
+	DDRB |= SDA;
+	DDRB |= SCL;
 	
 	USIDR = 0xff;
 	USICR = (1<<USIWM1)|(1<<USICLK);
@@ -137,7 +144,7 @@ i2c_transfer(bool byte)
 	
 	do {
 		USICR = d;
-		while (!(PINB & (1<<SCL)))
+		while (!(PINB & SCL))
 			;
 		delay(50);
 		USICR = d;
@@ -146,7 +153,7 @@ i2c_transfer(bool byte)
 	delay(50);
 	d = USIDR;
 	USIDR = 0xff;
-	DDRB |= (1<<SDA);
+	DDRB |= SDA;
 	
 	return d;
 }
@@ -160,17 +167,17 @@ i2c_send(char *data, int len)
 	
 	/* Start */
 	
-	PORTB |= (1<<SCL);
-	while (!(PINB & (1<<SCL)))
+	PORTB |= SCL;
+	while (!(PINB & SCL))
 		;
 	
 	delay(50);
 	
-	PORTB &= ~(1<<SDA);
+	PORTB &= ~SDA;
 	delay(50);
 	
-	PORTB &= ~(1<<SCL);
-	PORTB |= (1<<SDA);
+	PORTB &= ~SCL;
+	PORTB |= SDA;
 	
 	if (!(USISR & (1<<USISIF))) {
 		return 1;
@@ -178,19 +185,22 @@ i2c_send(char *data, int len)
 	
 	do {
 		if (addr || write) {
-			PORTB &= ~(1<<SCL);
+			PORTB &= ~SCL;
 			USIDR = *(data++);
 			
 			i2c_transfer(true);
 			
-			DDRB &= ~(1<<SDA);
+			DDRB &= ~SDA;
 			if (i2c_transfer(false) & 1) {
+		set_lamp_brightness(0);
+		while (true)
+			;
 				return 2;
 			}
 			
 			addr = false;
 		} else {
-			DDRB &= ~(1<<SDA);
+			DDRB &= ~SDA;
 			*(data++) = i2c_transfer(true);
 			
 			if (len == 1) {
@@ -205,13 +215,13 @@ i2c_send(char *data, int len)
 	
 	/* Stop */
 	
-	PORTB &= ~(1<<SDA);
-	PORTB |= (1<<SCL);
-	while (!(PINB & (1<<SCL)))
+	PORTB &= ~SDA;
+	PORTB |= SCL;
+	while (!(PINB & SCL))
 		;
 	
 	delay(50);
-	PORTB |= (1<<SDA);
+	PORTB |= SDA;
 	delay(50);
 	
 	if (!(USISR & (1<<USIPF))) {
@@ -219,6 +229,112 @@ i2c_send(char *data, int len)
 	}
 	
 	return 0;
+}
+
+#endif
+
+uint8_t segments[] = {
+	0x3f, 0x06, 0x5b, 0x4f,
+	0x66, 0x6d, 0x7d, 0x07,
+	0x7f, 0x6f, 0x77, 0x7c,
+	0x39, 0x5e, 0x79, 0x71
+};
+
+void
+init_display(void)
+{
+	DDRB |= DCK;
+	DDRB |= DIO;
+	PORTB &= ~DCK;
+	PORTB &= ~DIO;
+}
+
+void
+display_send_byte(uint8_t b)
+{
+	uint8_t count;
+	int i;
+	
+	for (i = 0; i < 8; i++) {
+		PORTB &= ~DCK;
+	
+		if (b & 1)
+			PORTB |= DIO;
+		else
+			PORTB &= ~DIO;
+				
+		b >>= 1;
+		PORTB |= DCK;
+	}
+	
+	PORTB &= ~DCK;
+	PORTB |= DIO;
+	PORTB |= DCK;
+	
+	DDRB &= ~DIO;
+	
+	while (PINB & DIO) {
+		if (count++ == 200) {
+			DDRB |= DIO;
+			PORTB &= ~DIO;
+			
+			count = 0;
+			
+			DDRB &= ~DIO;
+		}
+	}
+	
+	DDRB |= DIO;
+}
+
+void
+display_start(void)
+{
+	PORTB |= DCK;
+	PORTB |= DIO;
+	PORTB &= ~DIO;
+	PORTB &= ~DCK;
+}
+
+void
+display_stop(void)
+{
+	PORTB &= ~DCK;
+	PORTB &= ~DIO;
+	PORTB |= DCK;
+	PORTB |= DIO;
+}
+
+void
+display_draw(uint8_t a, uint8_t b, uint8_t c, uint8_t d)
+{	
+	display_start();
+	display_send_byte(0x40);
+	display_stop();
+	
+	display_start();
+	display_send_byte(0xc0);
+	display_send_byte(segments[a & 0xf]);
+	display_send_byte(segments[b & 0xf]);
+	display_send_byte(segments[c & 0xf]);
+	display_send_byte(segments[d & 0xf]);
+	display_stop();
+}
+
+void
+display_off(void)
+{
+	display_start();
+	display_send_byte(0x80);
+	display_stop();
+}
+
+void
+display_on(void)
+{
+	display_start();
+	display_send_byte(0x88 + 7);
+	display_stop();
 }
 
 ISR(TIMER1_OVF_vect)
@@ -541,50 +657,71 @@ state_t ((*states[])(void)) = {
 int
 main(void)
 {
-	char m0[] = { TM1637_comm1 };
-	char m1[] = { TM1637_comm2, 0xff, 0xff, 0xff, 0xff };
-	char m2[] = { TM1637_comm3 + 0x4 };
 	state_t s;
 	
 	DDRB |= LAMP;
-	PORTB |= BUTTON;
-	s = STATE_wait;
 	
 	init_timers();
 	
-	struct time t;
+	sei();
+	
 	int i;
 	for (i = 0; i < 5; i++) {
 		set_lamp_brightness(0xff);
 		
-		get_time(&t);
-		while (time_diff(&t) < SEC_MICRO)
-			;
+		delay(100000);
 	
 		set_lamp_brightness(0);
 		
-		get_time(&t);
-		while (time_diff(&t) < SEC_MICRO)
-			;
+		delay(100000);
 	}
 	
 	set_lamp_brightness(0xff);
 	
-	/*
-	init_i2c();
+	init_display();
 	
-	i2c_send(m0, sizeof(m0));
-	i2c_send(m1, sizeof(m1));
-	i2c_send(m2, sizeof(m2));
+	delay(1500);
+		
+	uint8_t a, b, c, d;
+	int j;
 	
-	*/
+		
+	display_on();
+	i = 0;
+	while (true) {
+		j = i++;
+		d = j % 16;
+		j /= 16;
+		c = j % 16;
+		j /= 16;
+		b = j % 16;
+		j /= 16;
+		a = j % 16;
 	
-	set_lamp_brightness(0);
+		display_draw(a, b, c, d);
+		
+		if (i % 10 == 0) {
+			display_on();
+		} else if (i % 5 == 0) {
+			display_off();
+		}
+		
+		delay(500000);
+	}
+			
+	while (true) {
 	
-	while (true)
-		;
+		set_lamp_brightness(0xff);
+		
+		delay(1000000);
+	
+		set_lamp_brightness(0);
+		
+		delay(1000000);
+	}
 	
 	sei();
+	s = STATE_wait;
 	while (true) {
 		s = states[s]();
 	}

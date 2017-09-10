@@ -2,7 +2,7 @@ DEVICE = attiny85
 PROGRAMMER = usbtiny
 CLOCK = 1000000UL
 
-CFLAGS = -Wall -Os
+CFLAGS = -Wall -O0
 CFLAGS += -mmcu=$(DEVICE) -DF_CPU=$(CLOCK)
 
 LDFLAGS = 
