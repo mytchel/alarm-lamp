@@ -3,31 +3,30 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#define LAMP      (1 << 1)
+#define LAMP      (1 << 0)
+
 #define BUTTON    (1 << 4)
+#define SDA       (1 << 0)
+#define SCL       (1 << 2)
+
+#define TM1637_comm1  0x40
+#define TM1637_comm2  0xc0
+#define TM1637_comm3  0x80
+
+#define ALARM_LENGTH 30
 
 #define SEC_MICRO 1000000UL
-#define DAY_SEC 86400UL
 
 /* Order of parts matters, otherwise the operation is not
  * done right due to 32bit limit. I think. */
 #define TIMER0_OVF_period \
-    (((SEC_MICRO * 256UL) / F_CPU) * 256UL)
+    (((SEC_MICRO * 256UL) / F_CPU) * 1UL)
 
 struct time {
-	uint32_t u, s, d;
+	uint32_t u, s;
 };
 
 volatile struct time time = {0};
-
-/* Time lamp should stay on for alarm in minutes.
- * Due to uint32_t constraint on times this can be
- * no longer than 70 minutes. */
- 
-#define ALARM_LENGTH  10
-
-uint32_t alarm = ((12 * 60) + 30) * 60UL;
-volatile bool alarmed_today = false;
 
 /* Debounced button signal. */
 volatile bool button_down = false;
@@ -42,6 +41,7 @@ typedef enum {
 	STATE_set_alarm,
 	STATE_set_time,
 	STATE_button_down,
+	STATE_button_down_cancel,
 } state_t;
 
 void
@@ -49,7 +49,7 @@ init_timers(void)
 {
 	TCCR1 |= (1<<CS13);
 		
-	TCCR0B |= (1<<CS02);
+	TCCR0B |= (1<<CS00);
 	TCNT0 = 0;
 	
 	TIMSK |= (1<<TOIE0);
@@ -65,12 +65,6 @@ ISR(TIMER0_OVF_vect)
 	if (time.u >= SEC_MICRO) {
 		time.u -= SEC_MICRO;
 		time.s++;
-		
-		if (time.s >= DAY_SEC) {
-			time.s -= DAY_SEC;
-			time.d++;
-			alarmed_today = false;
-		}
 	}
 	
 	/* Button debouncing. */
@@ -85,6 +79,146 @@ ISR(TIMER0_OVF_vect)
 	} else {
 		button_count = 0;
 	}
+}
+
+uint32_t
+time_diff(struct time *s)
+{
+	return (time.s - s->s) * SEC_MICRO
+	        + (time.u - s->u);
+}
+
+void
+get_time(struct time *dest)
+{
+	dest->s = time.s;
+	dest->u = time.u;
+}
+
+void
+delay(uint32_t t)
+{
+	struct time s;
+	
+	get_time(&s);
+	while (time_diff(&s) < t)
+		;
+}
+
+void
+init_i2c(void)
+{
+	PORTB |= (1<<SDA);
+	PORTB |= (1<<SCL);
+	
+	DDRB |= (1<<SDA);
+	DDRB |= (1<<SCL);
+	
+	USIDR = 0xff;
+	USICR = (1<<USIWM1)|(1<<USICLK);
+	
+	USISR = (1<<USISIF)|(1<<USIOIF)|
+	        (1<<USIPF)|(1<<USIDC);
+}
+
+char
+i2c_transfer(bool byte)
+{
+	char d = (1<<USISIF)|(1<<USIOIF)|
+	         (1<<USIPF)|(1<<USIDC);
+	        
+	if (byte) {
+		USISR = d | 0;
+	} else {
+		USISR = d | 0xe;
+	}
+	
+	d = (1<<USIWM1)|(1<<USICLK)|(1<<USITC);
+	
+	do {
+		USICR = d;
+		while (!(PINB & (1<<SCL)))
+			;
+		delay(50);
+		USICR = d;
+	} while (!(USISR & (1<<USIOIF)));
+
+	delay(50);
+	d = USIDR;
+	USIDR = 0xff;
+	DDRB |= (1<<SDA);
+	
+	return d;
+}
+
+int
+i2c_send(char *data, int len)
+{
+	bool addr = true, write;
+	
+	write = !(data[0] & 1);
+	
+	/* Start */
+	
+	PORTB |= (1<<SCL);
+	while (!(PINB & (1<<SCL)))
+		;
+	
+	delay(50);
+	
+	PORTB &= ~(1<<SDA);
+	delay(50);
+	
+	PORTB &= ~(1<<SCL);
+	PORTB |= (1<<SDA);
+	
+	if (!(USISR & (1<<USISIF))) {
+		return 1;
+	}
+	
+	do {
+		if (addr || write) {
+			PORTB &= ~(1<<SCL);
+			USIDR = *(data++);
+			
+			i2c_transfer(true);
+			
+			DDRB &= ~(1<<SDA);
+			if (i2c_transfer(false) & 1) {
+				return 2;
+			}
+			
+			addr = false;
+		} else {
+			DDRB &= ~(1<<SDA);
+			*(data++) = i2c_transfer(true);
+			
+			if (len == 1) {
+				USIDR = 0xff; /* End of transmisison. */
+			} else {
+				USIDR = 0x00; /* Ack. */
+			}
+			
+			i2c_transfer(false);
+		}
+	} while (len-- > 0);
+	
+	/* Stop */
+	
+	PORTB &= ~(1<<SDA);
+	PORTB |= (1<<SCL);
+	while (!(PINB & (1<<SCL)))
+		;
+	
+	delay(50);
+	PORTB |= (1<<SDA);
+	delay(50);
+	
+	if (!(USISR & (1<<USIPF))) {
+		return 3;
+	}
+	
+	return 0;
 }
 
 ISR(TIMER1_OVF_vect)
@@ -122,30 +256,13 @@ get_lamp_brightness(void)
 	return lamp_brightness;
 }
 
-uint32_t
-time_diff(struct time *s)
-{
-	return ((time.d - s->d) * DAY_SEC + (time.s - s->s)) * SEC_MICRO
-	        + (time.u - s->u);
-}
-
-void
-get_time(struct time *dest)
-{
-	dest->d = time.d;
-	dest->s = time.s;
-	dest->u = time.u;
-}
-
 state_t
-button_down_cancel(void)
+state_button_down_cancel(void)
 {
 	set_lamp_brightness(0);
 	
-	while (button_down)
-		;
-		
-	return STATE_wait;
+	return button_down ?
+	    STATE_button_down_cancel : STATE_wait;
 }
 
 state_t
@@ -156,7 +273,7 @@ state_on(void)
 	while (!button_down)
 		;
 	
-	return button_down_cancel();
+	return STATE_button_down_cancel;
 }
 
 state_t
@@ -168,8 +285,6 @@ state_alarm(void)
 	lt = 0;
 	get_time(&s);
 	
-	alarmed_today = true;
-	
 	set_lamp_brightness(0);
 	
 	/* Fade on. */
@@ -177,7 +292,7 @@ state_alarm(void)
 	lt = 0;
 	while (get_lamp_brightness() < 0xff) {
 		if (button_down) {
-			return button_down_cancel();
+			return STATE_button_down_cancel;
 		}
 		
 		t = time_diff(&s);
@@ -190,7 +305,7 @@ state_alarm(void)
 	/* Full for some time. */
 	do {
 		if (button_down) {
-			return button_down_cancel();
+			return STATE_button_down_cancel;
 		}
 		
 		t = time_diff(&s);
@@ -201,7 +316,7 @@ state_alarm(void)
 	lt = 0;
 	while (get_lamp_brightness() > 0) {
 		if (button_down) {
-			return button_down_cancel();
+			return STATE_button_down_cancel;
 		}
 		
 		t = time_diff(&s);
@@ -275,12 +390,7 @@ state_button_down(void)
 		t = time_diff(&s);
 	} while (t < 6 * SEC_MICRO);
 	
-	/* Cancel. */
-	set_lamp_brightness(0);
-	while (button_down)
-		;
-	
-	return STATE_wait;
+	return STATE_button_down_cancel;
 }
 
 int
@@ -387,12 +497,7 @@ state_set_alarm(void)
 	uint8_t hour, minute;
 	
 	if (get_hour_minutes(&hour, &minute, 4)) {
-		alarm = (hour * 60 + minute) * 60;
-		if (alarm >= time.s) {
-			alarmed_today = true;
-		} else {
-			alarmed_today = false;
-		}
+		/* Do something. */
 	}
 	
 	return STATE_wait;
@@ -404,9 +509,7 @@ state_set_time(void)
 	uint8_t hour, minute;
 	
 	if (get_hour_minutes(&hour, &minute, 8)) {
-		time.d = 0;
-		time.s = (hour * 60 + minute) * 60;
-		time.u = 0;
+		/* Do something. */
 	}
 	
 	return STATE_wait;
@@ -415,12 +518,7 @@ state_set_time(void)
 state_t
 state_wait(void)
 {
-	/* Last alarm was at least 23 hours ago and it is
-	 * past alarm time. */ 
-	if (!alarmed_today && time.s >= alarm) {
-		return STATE_alarm;
-		
-	} else if (button_down) {
+	if (button_down) {
 		return STATE_button_down;
 	
 	} else {
@@ -437,11 +535,15 @@ state_t ((*states[])(void)) = {
 	[STATE_set_alarm]   = state_set_alarm,
 	[STATE_set_time]    = state_set_time,
 	[STATE_button_down] = state_button_down,
+	[STATE_button_down_cancel] = state_button_down_cancel,
 };
 
 int
 main(void)
 {
+	char m0[] = { TM1637_comm1 };
+	char m1[] = { TM1637_comm2, 0xff, 0xff, 0xff, 0xff };
+	char m2[] = { TM1637_comm3 + 0x4 };
 	state_t s;
 	
 	DDRB |= LAMP;
@@ -449,6 +551,38 @@ main(void)
 	s = STATE_wait;
 	
 	init_timers();
+	
+	struct time t;
+	int i;
+	for (i = 0; i < 5; i++) {
+		set_lamp_brightness(0xff);
+		
+		get_time(&t);
+		while (time_diff(&t) < SEC_MICRO)
+			;
+	
+		set_lamp_brightness(0);
+		
+		get_time(&t);
+		while (time_diff(&t) < SEC_MICRO)
+			;
+	}
+	
+	set_lamp_brightness(0xff);
+	
+	/*
+	init_i2c();
+	
+	i2c_send(m0, sizeof(m0));
+	i2c_send(m1, sizeof(m1));
+	i2c_send(m2, sizeof(m2));
+	
+	*/
+	
+	set_lamp_brightness(0);
+	
+	while (true)
+		;
 	
 	sei();
 	while (true) {
