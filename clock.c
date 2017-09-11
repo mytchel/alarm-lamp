@@ -7,8 +7,6 @@
 
 #define DS1307_addr  0b1101000
 
-static uint8_t hour, min;
-
 void
 set_time(uint8_t h, uint8_t m)
 {

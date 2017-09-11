@@ -14,7 +14,7 @@
 /* Order of parts matters, otherwise the operation is not
  * done right due to 32bit limit. I think. */
 #define TIMER0_OVF_period \
-    (((SEC_MICRO * 256UL) / F_CPU) * 8UL)
+    (((SEC_MICRO * 256UL) / F_CPU) * 64UL)
 
 struct st {
 	uint32_t u, s;
@@ -40,7 +40,7 @@ typedef enum {
 void
 init_timers(void)
 {
-	TCCR0B |= (1<<CS01);
+	TCCR0B |= (1<<CS01)|(1<<CS00);
 	TIMSK0 |= (1<<TOIE0)|(1<<OCIE0A);
 }
 
@@ -213,31 +213,15 @@ state_button_down(void)
 		t = st_diff(&s);
 	} while (t < 2 * SEC_MICRO);
 	
-	/* Set alarm. */
 	set_lamp_brightness(0xff);
-	on = true;
-	set_display_state(on);
-	
+	on = false;
 	lt = 0;
+	
+	/* Set time. */
+	
 	do {
 		if (t > lt) {
 			lt = t + SEC_MICRO / 4;
-			on = !on;
-			set_display_state(on);
-		}
-	
-		if (!button_down) {
-			return STATE_set_alarm;
-		}
-		
-		t = st_diff(&s);
-	} while (t < 4 * SEC_MICRO);
-	
-	/* Set time. */
-	lt = 0;
-	do {
-		if (t > lt) {
-			lt = t + SEC_MICRO / 8;
 			on = !on;
 			set_display_state(on);
 		}
@@ -247,7 +231,29 @@ state_button_down(void)
 		}
 		
 		t = st_diff(&s);
-	} while (t < 6 * SEC_MICRO);
+	} while (t < 5 * SEC_MICRO);
+	
+	/* Set alarm. */
+	
+	get_alarm(&h, &m);
+	
+	display_draw(true, 
+	             h / 10, h % 10,
+	             m / 10, m % 10);
+	
+	do {
+		if (t > lt) {
+			lt = t + SEC_MICRO / 8;
+			on = !on;
+			set_display_state(on);
+		}
+	
+		if (!button_down) {
+			return STATE_set_alarm;
+		}
+		
+		t = st_diff(&s);
+	} while (t < 8 * SEC_MICRO);
 	
 	return STATE_button_down_cancel;
 }
@@ -274,7 +280,7 @@ get_setting_hour_minutes_value(uint8_t *h, uint8_t *m, uint8_t rate, bool ishour
 				t = st_diff(&s);
 				if (t > lt) {
 					lt = t + SEC_MICRO / rate;
-					if (lt > SEC_MICRO * 3) {
+					if (lt > SEC_MICRO * 5) {
 						return false;
 					}
 					
@@ -343,7 +349,6 @@ get_setting_hour_minutes_value(uint8_t *h, uint8_t *m, uint8_t rate, bool ishour
 	}
 }
 
-
 bool
 get_setting_hour_minutes(uint8_t *h, uint8_t *m, uint8_t rate)
 {
@@ -361,8 +366,8 @@ state_set_alarm(void)
 		
 	get_time(&h, &m);
 	
-	if (get_setting_hour_minutes(&h, &m, 4)) {
-		set_time(h, m);
+	if (get_setting_hour_minutes(&h, &m, 8)) {
+		set_alarm(h, m);
 		return STATE_on;
 	} else {
 		return STATE_button_down_cancel;
@@ -377,14 +382,12 @@ state_set_time(void)
 		
 	get_time(&h, &m);
 	
-	if (get_setting_hour_minutes(&h, &m, 8)) {
-		set_alarm(h, m);
+	if (get_setting_hour_minutes(&h, &m, 4)) {
+		set_time(h, m);
 		return STATE_on;
 	} else {
 		return STATE_button_down_cancel;
 	}
-	
-	return STATE_on;
 }
 
 state_t
@@ -423,7 +426,7 @@ main(void)
 	init_display();
 	init_i2c();
 	
-	sei();	
+	sei();
 	
 	s = STATE_wait;
 	while (true) {
