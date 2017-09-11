@@ -9,7 +9,7 @@
 
 #define SEC_MICRO 1000000UL
 
-#define BUTTON_DEBOUNCE 30
+#define BUTTON_DEBOUNCE 100
 
 /* Order of parts matters, otherwise the operation is not
  * done right due to 32bit limit. I think. */
@@ -370,8 +370,7 @@ state_set_alarm(void)
 		return STATE_on;
 	} else {
 		return STATE_button_down_cancel;
-	}
-	
+	}	
 }
 
 state_t
