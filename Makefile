@@ -1,13 +1,11 @@
-DEVICE = attiny85
-PROGRAMMER = usbtiny
 CLOCK = 1000000UL
 
 CFLAGS = -Wall -O0
-CFLAGS += -mmcu=$(DEVICE) -DF_CPU=$(CLOCK)
+CFLAGS += -mmcu=atmega328 -DF_CPU=$(CLOCK)
 
 LDFLAGS = 
 
-AVRDUDE = avrdude -c $(PROGRAMMER) -p $(DEVICE)
+AVRDUDE = avrdude -c usbtiny -p m328
 CC = avr-gcc
 OBJCOPY = avr-objcopy
 OBJDUMP = avr-objdump

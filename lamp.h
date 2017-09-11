@@ -1,6 +1,37 @@
 
+
+#define LAMP_PIN_N  1
+#define DDR_LAMP    DDRB
+#define PIN_LAMP    PINB
+#define PORT_LAMP   PORTB
+
+#define BUTTON_PIN_N  4
+#define DDR_BUTTON    DDRB
+#define PIN_BUTTON    PINB
+#define PORT_BUTTON   PORTB
+
+#define DIO_PIN_N  0
+#define DDR_DIO    DDRB
+#define PIN_DIO    PINB
+#define PORT_DIO   PORTB
+
+#define DCK_PIN_N  2
+#define DDR_DCK    DDRB
+#define PIN_DCK    PINB
+#define PORT_DCK   PORTB
+
+#define SDA_PIN_N  8
+#define DDR_SDA    DDRB
+#define PIN_SDA    PINB
+#define PORT_SDA   PORTB
+
+#define SCL_PIN_N  8
+#define DDR_SCL    DDRB
+#define PIN_SCL    PINB
+#define PORT_SCL   PORTB
+
 void
-init_display(int dck, int dio);
+init_display(void);
 
 void
 display_draw(bool sep, uint8_t a, uint8_t b, uint8_t c, uint8_t d);
@@ -11,18 +42,14 @@ set_display_state(bool on);
 bool
 get_display_state(void);
 
-
 void
-init_i2c(uint8_t sda, uint8_t scl);
+init_i2c(void);
 
 int
 i2c_send(char *data, int len);
 
 void
 delay(uint32_t t);
-
-void
-init_clock(int sda, int scl);
 
 void
 set_time(uint8_t h, uint8_t m);

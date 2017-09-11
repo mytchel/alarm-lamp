@@ -3,6 +3,8 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
+#include "lamp.h"
+
 static uint8_t segments[] = {
 	0x3f, 0x06, 0x5b, 0x4f,
 	0x66, 0x6d, 0x7d, 0x07,
@@ -12,18 +14,13 @@ static uint8_t segments[] = {
 
 static bool display_on;
 
-static uint8_t DCK, DIO;
-
 void
-init_display(int dck, int dio)
+init_display(void)
 {
-	DCK = 1 << dck;
-	DIO = 1 << dio;
-	
-	DDRB |= DCK;
-	DDRB |= DIO;
-	PORTB &= ~DCK;
-	PORTB &= ~DIO;
+	DDR_DCK |= (1<<DCK_PIN_N);
+	DDR_DIO |= (1<<DIO_PIN_N);
+	PORT_DCK &= ~(1<<DCK_PIN_N);
+	PORT_DIO &= ~(1<<DIO_PIN_N);
 	display_on = false;
 }
 
@@ -34,53 +31,53 @@ display_send_byte(uint8_t b)
 	int i;
 	
 	for (i = 0; i < 8; i++) {
-		PORTB &= ~DCK;
+		PORT_DCK &= ~(1<<DCK_PIN_N);
 	
 		if (b & 1)
-			PORTB |= DIO;
+			PORT_DIO |= (1<<DIO_PIN_N);
 		else
-			PORTB &= ~DIO;
+			PORT_DIO &= ~(1<<DIO_PIN_N);
 				
 		b >>= 1;
-		PORTB |= DCK;
+		PORT_DCK |= (1<<DCK_PIN_N);
 	}
 	
-	PORTB &= ~DCK;
-	PORTB |= DIO;
-	PORTB |= DCK;
+	PORT_DCK &= ~(1<<DCK_PIN_N);
+	PORT_DIO |= (1<<DIO_PIN_N);
+	PORT_DCK |= (1<<DCK_PIN_N);
 	
-	DDRB &= ~DIO;
+	DDR_DIO &= ~(1<<DIO_PIN_N);
 	
-	while (PINB & DIO) {
+	while (PIN_DIO & (1<<DIO_PIN_N)) {
 		if (count++ == 200) {
-			DDRB |= DIO;
-			PORTB &= ~DIO;
+			DDR_DIO |= (1<<DIO_PIN_N);
+			PORT_DIO &= ~(1<<DIO_PIN_N);
 			
 			count = 0;
 			
-			DDRB &= ~DIO;
+			DDR_DIO &= ~(1<<DIO_PIN_N);
 		}
 	}
 	
-	DDRB |= DIO;
+	DDR_DIO |= (1<<DIO_PIN_N);
 }
 
 void
 display_start(void)
 {
-	PORTB |= DCK;
-	PORTB |= DIO;
-	PORTB &= ~DIO;
-	PORTB &= ~DCK;
+	PORT_DCK |= (1<<DCK_PIN_N);
+	PORT_DIO |= (1<<DIO_PIN_N);
+	PORT_DIO &= ~(1<<DIO_PIN_N);
+	PORT_DCK &= ~(1<<DCK_PIN_N);
 }
 
 void
 display_stop(void)
 {
-	PORTB &= ~DCK;
-	PORTB &= ~DIO;
-	PORTB |= DCK;
-	PORTB |= DIO;
+	PORT_DCK &= ~(1<<DCK_PIN_N);
+	PORT_DIO &= ~(1<<DIO_PIN_N);
+	PORT_DCK |= (1<<DCK_PIN_N);
+	PORT_DIO |= (1<<DIO_PIN_N);
 }
 
 void

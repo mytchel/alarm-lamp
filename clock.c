@@ -8,12 +8,6 @@
 static uint8_t hour, min;
 
 void
-init_clock(int sda, int scl)
-{
-	init_i2c(sda, scl);
-}
-
-void
 set_time(uint8_t h, uint8_t m)
 {
 	hour = h;

@@ -5,16 +5,6 @@
 
 #include "lamp.h"
 
-#define PIN_LAMP    1
-#define PIN_BUTTON  4
-#define PIN_DIO     0
-#define PIN_DCK     2
-#define PIN_CSDA    7
-#define PIN_CSCL    7
-
-#define LAMP      (1 << PIN_LAMP)
-#define BUTTON    (1 << PIN_BUTTON)
-
 #define ALARM_LENGTH 30
 
 #define SEC_MICRO 1000000UL
@@ -71,11 +61,11 @@ ISR(TIMER0_OVF_vect)
 	}
 	
 	/* Button debouncing. */
-	if ((PINB & BUTTON) && button_down) {
+	if ((PIN_BUTTON & (1<<BUTTON_PIN_N)) && button_down) {
 		if (button_count++ == BUTTON_DEBOUNCE) {
 			button_down = false;
 		}
-	} else if ((PINB & BUTTON) == 0 && !button_down) {
+	} else if ((PIN_BUTTON & (1<<BUTTON_PIN_N)) == 0 && !button_down) {
 		if (button_count++ == BUTTON_DEBOUNCE) {
 			button_down = true;
 		}
@@ -110,13 +100,13 @@ delay(uint32_t t)
 
 ISR(TIMER1_OVF_vect)
 {
-	PORTB |= LAMP;
+	PORT_LAMP |= (1<<LAMP_PIN_N);
 	OCR1A = lamp_brightness;
 }
 
 ISR(TIMER1_COMPA_vect)
 {
-	PORTB &= ~LAMP;
+	PORT_LAMP &= ~(1<<LAMP_PIN_N);
 }
 
 void
@@ -125,11 +115,11 @@ set_lamp_brightness(uint8_t b)
 	lamp_brightness = b;
 	
 	if (b == 0) {
-		PORTB &= ~LAMP;
+		PORT_LAMP &= ~(1<<LAMP_PIN_N);
 		TIMSK &= ~((1<<TOIE1)|(1<<OCIE1A));
 		
 	} else if (b == 0xff) {
-		PORTB |= LAMP;
+		PORT_LAMP |= (1<<LAMP_PIN_N);
 		TIMSK &= ~((1<<TOIE1)|(1<<OCIE1A));
 		
 	} else {
@@ -476,12 +466,12 @@ main(void)
 {
 	state_t s;
 	
-	DDRB |= LAMP;
-	PORTB |= BUTTON;
+	DDR_LAMP |= (1<<LAMP_PIN_N);
+	PORT_BUTTON |= (1<<BUTTON_PIN_N);
 	
 	init_timers();
-	init_display(PIN_DCK, PIN_DIO);
-	init_clock(PIN_CSDA, PIN_CSCL);
+	init_display();
+	init_i2c();
 	
 	sei();
 	delay(1500);

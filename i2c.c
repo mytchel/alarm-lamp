@@ -5,19 +5,14 @@
 
 #include "lamp.h"
 
-static uint8_t SDA, SCL;
-
 void
-init_i2c(uint8_t sda, uint8_t scl)
+init_i2c(void)
 {
-	SDA = 1 << sda;
-	SCL = 1 << scl;
+	PORT_SDA |= (1<<SDA_PIN_N);
+	PORT_SCL |= (1<<SCL_PIN_N);
 	
-	PORTB |= SDA;
-	PORTB |= SCL;
-	
-	DDRB |= SDA;
-	DDRB |= SCL;
+	DDR_SDA |= (1<<SDA_PIN_N);
+	DDR_SCL |= (1<<SCL_PIN_N);
 	
 	USIDR = 0xff;
 	USICR = (1<<USIWM1)|(1<<USICLK);
@@ -42,7 +37,7 @@ i2c_transfer(bool byte)
 	
 	do {
 		USICR = d;
-		while (!(PINB & SCL))
+		while (!(PIN_SCL & (1<<SCL_PIN_N)))
 			;
 		delay(50);
 		USICR = d;
@@ -51,7 +46,7 @@ i2c_transfer(bool byte)
 	delay(50);
 	d = USIDR;
 	USIDR = 0xff;
-	DDRB |= SDA;
+	DDR_SDA |= (1<<SDA_PIN_N);
 	
 	return d;
 }
@@ -65,17 +60,17 @@ i2c_send(char *data, int len)
 	
 	/* Start */
 	
-	PORTB |= SCL;
-	while (!(PINB & SCL))
+	PORT_SCL |= (1<<SCL_PIN_N);
+	while (!(PIN_SCL & (1<<SCL_PIN_N)))
 		;
 	
 	delay(50);
 	
-	PORTB &= ~SDA;
+	PORT_SDA &= ~(1<<SDA_PIN_N);
 	delay(50);
 	
-	PORTB &= ~SCL;
-	PORTB |= SDA;
+	PORT_SCL &= ~(1<<SCL_PIN_N);
+	PORT_SDA |= (1<<SDA_PIN_N);
 	
 	if (!(USISR & (1<<USISIF))) {
 		return 1;
@@ -83,19 +78,19 @@ i2c_send(char *data, int len)
 	
 	do {
 		if (addr || write) {
-			PORTB &= ~SCL;
+			PORT_SCL &= ~(1<<SCL_PIN_N);
 			USIDR = *(data++);
 			
 			i2c_transfer(true);
 			
-			DDRB &= ~SDA;
+			DDR_SDA &= ~(1<<SDA_PIN_N);
 			if (i2c_transfer(false) & 1) {
 				return 2;
 			}
 			
 			addr = false;
 		} else {
-			DDRB &= ~SDA;
+			DDR_SDA &= ~(1<<SDA_PIN_N);
 			*(data++) = i2c_transfer(true);
 			
 			if (len == 1) {
@@ -110,13 +105,13 @@ i2c_send(char *data, int len)
 	
 	/* Stop */
 	
-	PORTB &= ~SDA;
-	PORTB |= SCL;
-	while (!(PINB & SCL))
+	PORT_SDA &= ~(1<<SDA_PIN_N);
+	PORT_SCL |= (1<<SCL_PIN_N);
+	while (!(PIN_SCL & (1<<SCL_PIN_N)))
 		;
 	
 	delay(50);
-	PORTB |= SDA;
+	PORT_SDA |= (1<<SDA_PIN_N);
 	delay(50);
 	
 	if (!(USISR & (1<<USIPF))) {
