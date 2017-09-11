@@ -20,3 +20,18 @@ i2c_send(char *data, int len);
 
 void
 delay(uint32_t t);
+
+void
+init_clock(int sda, int scl);
+
+void
+set_time(uint8_t h, uint8_t m);
+
+void
+set_alarm(uint8_t h, uint8_t m);
+
+void
+get_time(uint8_t *h, uint8_t *m);
+
+void
+get_alarm(uint8_t *h, uint8_t *m);

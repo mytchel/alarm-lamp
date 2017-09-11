@@ -12,7 +12,7 @@ CC = avr-gcc
 OBJCOPY = avr-objcopy
 OBJDUMP = avr-objdump
 
-SRC = main.c display.c i2c.c
+SRC = main.c display.c clock.c i2c.c
 OBJ = $(SRC:%.c=%.o)
 
 .SUFFIXES:
