@@ -8,9 +8,10 @@
 
 void
 init_i2c(void)
-{
+{	
 	TWSR = 0;
 	TWBR = 22;
+	TWCR = (1<<TWEN);
 }
 
 bool
@@ -20,15 +21,12 @@ i2c_message(uint8_t addr,
 {
 	int i;
 	
-	set_lamp_brightness(0);
-	
 	TWCR = (1<<TWINT)|(1<<TWSTA)|(1<<TWEN);
 	
 	while (!(TWCR & (1<<TWINT)))
 		;
 	
 	if ((TWSR & 0xf8) != TW_START) {
-		set_lamp_brightness(0xff);
 		return false;
 	}
 	
@@ -61,7 +59,7 @@ i2c_message(uint8_t addr,
 			while (!(TWCR & (1<<TWINT)))
 				;
 			
-			if ((TWSR & 0xf8) != TW_START) {
+			if ((TWSR & 0xf8) != TW_REP_START) {
 				return false;
 			}
 		}
@@ -79,7 +77,7 @@ i2c_message(uint8_t addr,
 		}
 		
 		for (i = 0; i < rlen; i++) {
-			if (i + 1 < rlen) {
+			if (i + 1 == rlen) {
 				TWCR = (1<<TWINT)|(1<<TWEN);
 			} else {
 				TWCR = (1<<TWINT)|(1<<TWEA)|(1<<TWEN);
@@ -88,8 +86,10 @@ i2c_message(uint8_t addr,
 			while (!(TWCR & (1<<TWINT)))
 				;
 			
-			if (i + 1 < rlen && (TWSR & 0xf8) != TW_MR_DATA_NACK) {
-				return false;
+			if (i + 1 == rlen) {
+				if ((TWSR & 0xf8) != TW_MR_DATA_NACK) {
+					return false;
+				}
 			} else if ((TWSR & 0xf8) != TW_MR_DATA_ACK) {
 				return false;
 			}

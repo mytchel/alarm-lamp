@@ -41,6 +41,7 @@ clock_test(void)
 	uint8_t addr = 0b1101000;
 	uint8_t wm[1] = { 0 };
 	uint8_t rm[2] = { 0 };
+	uint8_t hh, hl, mh, ml;
 	
 	set_display_state(true);
 	
@@ -49,8 +50,13 @@ clock_test(void)
 		            wm, sizeof(wm),
 		            rm, sizeof(rm));
 	
+		hh = (rm[1] >> 4) & 0x7;
+		hl = rm[1] & 0xf;
+		
+		mh = (rm[0] >> 4) & 0x7;
+		ml = rm[0] & 0xf;
+		
 		display_draw(true,
-		             rm[1] / 10, rm[1] % 10,
-		             rm[0] / 10, rm[0] % 10);
+		             hh, hl, mh, ml);
 	}
 }
