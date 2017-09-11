@@ -425,8 +425,6 @@ main(void)
 	
 	sei();	
 	
-	clock_test();
-	
 	s = STATE_wait;
 	while (true) {
 		s = states[s]();
