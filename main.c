@@ -236,7 +236,6 @@ state_button_down(void)
 	/* Set alarm. */
 	
 	get_alarm(&h, &m);
-	
 	display_draw(true, 
 	             h / 10, h % 10,
 	             m / 10, m % 10);
@@ -364,7 +363,7 @@ state_set_alarm(void)
 {
 	uint8_t h, m;
 		
-	get_time(&h, &m);
+	get_alarm(&h, &m);
 	
 	if (get_setting_hour_minutes(&h, &m, 8)) {
 		set_alarm(h, m);
