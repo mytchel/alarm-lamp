@@ -9,7 +9,7 @@
 
 #define SEC_MICRO 1000000UL
 
-#define BUTTON_DEBOUNCE 100
+#define BUTTON_DEBOUNCE 30
 
 /* Order of parts matters, otherwise the operation is not
  * done right due to 32bit limit. I think. */
@@ -58,7 +58,7 @@ ISR(TIMER0_OVF_vect)
 		if (button_count++ == BUTTON_DEBOUNCE) {
 			button_down = false;
 		}
-	} else if ((PIN_BUTTON & (1<<BUTTON_PIN_N)) == 0 && !button_down) {
+	} else if (!(PIN_BUTTON & (1<<BUTTON_PIN_N)) && !button_down) {
 		if (button_count++ == BUTTON_DEBOUNCE) {
 			button_down = true;
 		}
@@ -154,6 +154,7 @@ state_t
 state_alarm(void)
 {
 	uint8_t th, tm, ah, am;	
+	uint32_t td;
 	
 	get_time(&th, &tm);
 	get_alarm(&ah, &am);
@@ -165,7 +166,9 @@ state_alarm(void)
 		
 	set_lamp_brightness(0xff);
 	
-	if (tm - am > 30) {
+	td = (th - ah) * 60 + (tm - am);
+	
+	if (td > 30) {
 		return STATE_wait;
 	} else {
 		return STATE_alarm;
@@ -279,17 +282,14 @@ get_setting_hour_minutes_value(uint8_t *h, uint8_t *m, uint8_t rate, bool ishour
 				t = st_diff(&s);
 				if (t > lt) {
 					lt = t + SEC_MICRO / rate;
-					if (lt > SEC_MICRO * 5) {
-						return false;
-					}
 					
 					on = !on;
-					if (on || (!ishour && lt > SEC_MICRO)) {
+					if (on || (!ishour && t > SEC_MICRO)) {
 						display_draw(true, 
 						             *h / 10, *h % 10,
 						             *m / 10, *m % 10);
 						             				            
-					} else if (!ishour || lt > SEC_MICRO) {
+					} else if (!ishour || t > SEC_MICRO) {
 						display_draw(true, 
 						             *h / 10, *h % 10,
 						             0x10, 0x10);
@@ -298,7 +298,6 @@ get_setting_hour_minutes_value(uint8_t *h, uint8_t *m, uint8_t rate, bool ishour
 						display_draw(true, 
 						             0x10, 0x10,
 						             *m / 10, *m % 10);
-						             
 					}
 				}
 				
@@ -377,7 +376,7 @@ state_t
 state_set_time(void)
 {
 	uint8_t h, m;
-		
+	
 	get_time(&h, &m);
 	
 	if (get_setting_hour_minutes(&h, &m, 4)) {
@@ -391,14 +390,23 @@ state_set_time(void)
 state_t
 state_wait(void)
 {
+	uint8_t ah, am, th, tm;
+	
 	if (button_down) {
 		return STATE_button_down;
 	
 	} else {
 		set_lamp_brightness(0);
 		set_display_state(false);
-	
-		return STATE_wait;
+		
+		get_alarm(&ah, &am);
+		get_time(&th, &tm);
+		
+		if (th == ah && tm == am) {
+			return STATE_alarm;
+		} else {
+			return STATE_wait;
+		}
 	}
 }
 
