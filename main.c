@@ -3,14 +3,15 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#define LAMP      (1 << 1)
-#define BUTTON    (1 << 4)
-#define DIO       (1 << 0)
-#define DCK       (1 << 2)
+#include "lamp.h"
 
-#define TM1637_comm1  0x40
-#define TM1637_comm2  0xc0
-#define TM1637_comm3  0x80
+#define PIN_LAMP   1
+#define PIN_BUTTON 4
+#define PIN_DIO    0
+#define PIN_DCK    2
+
+#define LAMP      (1 << PIN_LAMP)
+#define BUTTON    (1 << PIN_BUTTON)
 
 #define ALARM_LENGTH 30
 
@@ -231,113 +232,6 @@ i2c_send(char *data, int len)
 
 #endif
 
-uint8_t segments[] = {
-	0x3f, 0x06, 0x5b, 0x4f,
-	0x66, 0x6d, 0x7d, 0x07,
-	0x7f, 0x6f, 0x77, 0x7c,
-	0x39, 0x5e, 0x79, 0x71
-};
-
-bool display_on;
-
-void
-init_display(void)
-{
-	DDRB |= DCK;
-	DDRB |= DIO;
-	PORTB &= ~DCK;
-	PORTB &= ~DIO;
-	display_on = false;
-}
-
-void
-display_send_byte(uint8_t b)
-{
-	uint8_t count;
-	int i;
-	
-	for (i = 0; i < 8; i++) {
-		PORTB &= ~DCK;
-	
-		if (b & 1)
-			PORTB |= DIO;
-		else
-			PORTB &= ~DIO;
-				
-		b >>= 1;
-		PORTB |= DCK;
-	}
-	
-	PORTB &= ~DCK;
-	PORTB |= DIO;
-	PORTB |= DCK;
-	
-	DDRB &= ~DIO;
-	
-	while (PINB & DIO) {
-		if (count++ == 200) {
-			DDRB |= DIO;
-			PORTB &= ~DIO;
-			
-			count = 0;
-			
-			DDRB &= ~DIO;
-		}
-	}
-	
-	DDRB |= DIO;
-}
-
-void
-display_start(void)
-{
-	PORTB |= DCK;
-	PORTB |= DIO;
-	PORTB &= ~DIO;
-	PORTB &= ~DCK;
-}
-
-void
-display_stop(void)
-{
-	PORTB &= ~DCK;
-	PORTB &= ~DIO;
-	PORTB |= DCK;
-	PORTB |= DIO;
-}
-
-void
-display_draw(bool sep, uint8_t a, uint8_t b, uint8_t c, uint8_t d)
-{	
-	display_start();
-	display_send_byte(0x40);
-	display_stop();
-	
-	display_start();
-	display_send_byte(0xc0);
-	display_send_byte(a == 0x10 ? 0 : segments[a & 0xf]);
-	display_send_byte(b == 0x10 ? 0 : segments[b & 0xf] | (sep ? 0x80 : 0));
-	display_send_byte(c == 0x10 ? 0 : segments[c & 0xf]);
-	display_send_byte(d == 0x10 ? 0 : segments[d & 0xf]);
-	display_stop();
-}
-
-void
-set_display_state(bool on)
-{
-	display_on = on;
-	
-	display_start();
-	display_send_byte((0x80 + 7) | (on ? 0x08 : 0));
-	display_stop();
-}
-
-bool
-get_display_state(void)
-{
-	return display_on;
-}
-
 uint8_t hour, min;
 
 void
@@ -358,6 +252,13 @@ get_time(uint8_t *h, uint8_t *m)
 {
 	*h = hour;
 	*m = min;
+}
+
+void
+get_alarm(uint8_t *h, uint8_t *m)
+{
+	*h = 0;
+	*m = 0;
 }
 
 ISR(TIMER1_OVF_vect)
@@ -586,14 +487,17 @@ get_setting_hour_minutes_value(uint8_t *h, uint8_t *m, uint8_t rate, bool ishour
 				t = st_diff(&s);
 				if (t > lt) {
 					lt = t + SEC_MICRO / rate;
+					if (lt > SEC_MICRO * 3) {
+						return false;
+					}
 					
 					on = !on;
-					if (on) {
+					if (on || (!ishour && lt > SEC_MICRO)) {
 						display_draw(true, 
 						             *h / 10, *h % 10,
 						             *m / 10, *m % 10);
 						             				            
-					} else if (!ishour || lt > SEC_MICRO * 3) {
+					} else if (!ishour || lt > SEC_MICRO) {
 						display_draw(true, 
 						             *h / 10, *h % 10,
 						             0x10, 0x10);
@@ -607,12 +511,10 @@ get_setting_hour_minutes_value(uint8_t *h, uint8_t *m, uint8_t rate, bool ishour
 				}
 				
 				if (!button_down) {
-					if (t < SEC_MICRO) {
+					if (t <= SEC_MICRO) {
 						break;
-					} else if (t <= SEC_MICRO * 3) {
-						return true;
 					} else {
-						return false;
+						return true;
 					}
 				}
 			}
@@ -674,9 +576,11 @@ state_set_alarm(void)
 	
 	if (get_setting_hour_minutes(&h, &m, 4)) {
 		set_time(h, m);
+		return STATE_on;
+	} else {
+		return STATE_button_down_cancel;
 	}
 	
-	return STATE_on;
 }
 
 state_t
@@ -686,8 +590,11 @@ state_set_time(void)
 		
 	get_time(&h, &m);
 	
-	if (get_setting_hour_minutes(&h, &m, 4)) {
+	if (get_setting_hour_minutes(&h, &m, 8)) {
 		set_alarm(h, m);
+		return STATE_on;
+	} else {
+		return STATE_button_down_cancel;
 	}
 	
 	return STATE_on;
@@ -726,7 +633,7 @@ main(void)
 	PORTB |= BUTTON;
 	
 	init_timers();
-	init_display();
+	init_display(PIN_DCK, PIN_DIO);
 	
 	sei();
 	delay(1500);
