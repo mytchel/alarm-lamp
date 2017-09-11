@@ -16,16 +16,18 @@
 
 #define SEC_MICRO 1000000UL
 
+#define BUTTON_DEBOUNCE 30
+
 /* Order of parts matters, otherwise the operation is not
  * done right due to 32bit limit. I think. */
 #define TIMER0_OVF_period \
     (((SEC_MICRO * 256UL) / F_CPU) * 1UL)
 
-struct time {
+struct st {
 	uint32_t u, s;
 };
 
-volatile struct time time = {0};
+volatile struct st st = {0};
 
 /* Debounced button signal. */
 volatile bool button_down = false;
@@ -41,10 +43,6 @@ typedef enum {
 	STATE_button_down,
 	STATE_button_down_cancel,
 } state_t;
-
-
-void
-set_lamp_brightness(uint8_t b);
 
 void
 init_timers(void)
@@ -62,20 +60,20 @@ ISR(TIMER0_OVF_vect)
 	static uint32_t button_count = 0;
 	
 	/* Time keeping. */
-	time.u += TIMER0_OVF_period;
+	st.u += TIMER0_OVF_period;
 	
-	if (time.u >= SEC_MICRO) {
-		time.u -= SEC_MICRO;
-		time.s++;
+	if (st.u >= SEC_MICRO) {
+		st.u -= SEC_MICRO;
+		st.s++;
 	}
 	
 	/* Button debouncing. */
 	if ((PINB & BUTTON) && button_down) {
-		if (button_count++ == 3) {
+		if (button_count++ == BUTTON_DEBOUNCE) {
 			button_down = false;
 		}
 	} else if ((PINB & BUTTON) == 0 && !button_down) {
-		if (button_count++ == 3) {
+		if (button_count++ == BUTTON_DEBOUNCE) {
 			button_down = true;
 		}
 	} else {
@@ -84,26 +82,26 @@ ISR(TIMER0_OVF_vect)
 }
 
 uint32_t
-time_diff(struct time *s)
+st_diff(struct st *s)
 {
-	return (time.s - s->s) * SEC_MICRO
-	        + (time.u - s->u);
+	return (st.s - s->s) * SEC_MICRO
+	        + (st.u - s->u);
 }
 
 void
-get_time(struct time *dest)
+init_st(struct st *dest)
 {
-	dest->s = time.s;
-	dest->u = time.u;
+	dest->s = st.s;
+	dest->u = st.u;
 }
 
 void
 delay(uint32_t t)
 {
-	struct time s;
+	struct st s;
 	
-	get_time(&s);
-	while (time_diff(&s) < t)
+	init_st(&s);
+	while (st_diff(&s) < t)
 		;
 }
 
@@ -240,6 +238,8 @@ uint8_t segments[] = {
 	0x39, 0x5e, 0x79, 0x71
 };
 
+bool display_on;
+
 void
 init_display(void)
 {
@@ -247,6 +247,7 @@ init_display(void)
 	DDRB |= DIO;
 	PORTB &= ~DCK;
 	PORTB &= ~DIO;
+	display_on = false;
 }
 
 void
@@ -314,27 +315,49 @@ display_draw(bool sep, uint8_t a, uint8_t b, uint8_t c, uint8_t d)
 	
 	display_start();
 	display_send_byte(0xc0);
-	display_send_byte(segments[a & 0xf]);
-	display_send_byte(segments[b & 0xf] | (sep ? 0x80 : 0));
-	display_send_byte(segments[c & 0xf]);
-	display_send_byte(segments[d & 0xf]);
+	display_send_byte(a == 0x10 ? 0 : segments[a & 0xf]);
+	display_send_byte(b == 0x10 ? 0 : segments[b & 0xf] | (sep ? 0x80 : 0));
+	display_send_byte(c == 0x10 ? 0 : segments[c & 0xf]);
+	display_send_byte(d == 0x10 ? 0 : segments[d & 0xf]);
 	display_stop();
 }
 
 void
-display_off(void)
+set_display_state(bool on)
 {
+	display_on = on;
+	
 	display_start();
-	display_send_byte(0x80);
+	display_send_byte((0x80 + 7) | (on ? 0x08 : 0));
 	display_stop();
 }
 
-void
-display_on(void)
+bool
+get_display_state(void)
 {
-	display_start();
-	display_send_byte(0x88 + 7);
-	display_stop();
+	return display_on;
+}
+
+uint8_t hour, min;
+
+void
+set_time(uint8_t h, uint8_t m)
+{
+	hour = h;
+	min = m;
+}
+
+void
+set_alarm(uint8_t h, uint8_t m)
+{
+
+}
+
+void
+get_time(uint8_t *h, uint8_t *m)
+{
+	*h = hour;
+	*m = min;
 }
 
 ISR(TIMER1_OVF_vect)
@@ -384,24 +407,40 @@ state_button_down_cancel(void)
 state_t
 state_on(void)
 {
+	uint8_t h, m;
+	
 	set_lamp_brightness(0xff);
 	
-	while (!button_down)
-		;
+	get_time(&h, &m);
 	
-	return STATE_button_down_cancel;
+	set_display_state(true);
+	display_draw(true, 
+	             h / 10, h % 10,
+	             m / 10, m % 10);
+	
+	return button_down ? 
+	      STATE_button_down_cancel
+	    : STATE_on;
 }
 
 state_t
 state_alarm(void)
 {
 	uint32_t lt, t;
-	struct time s;
+	uint8_t h, m;
+	struct st s;
 	
 	lt = 0;
-	get_time(&s);
+	init_st(&s);
 	
 	set_lamp_brightness(0);
+	
+	get_time(&h, &m);
+	
+	set_display_state(true);
+	display_draw(true, 
+	             h / 10, h % 10,
+	             m / 10, m % 10);
 	
 	/* Fade on. */
 	
@@ -411,7 +450,7 @@ state_alarm(void)
 			return STATE_button_down_cancel;
 		}
 		
-		t = time_diff(&s);
+		t = st_diff(&s);
 		if (t > lt) {
 			lt = t + SEC_MICRO;
 			set_lamp_brightness(get_lamp_brightness() + 1);
@@ -424,7 +463,7 @@ state_alarm(void)
 			return STATE_button_down_cancel;
 		}
 		
-		t = time_diff(&s);
+		t = st_diff(&s);
 	} while (t < ALARM_LENGTH * 60 * SEC_MICRO);
 	
 	/* Fade off. */
@@ -435,7 +474,7 @@ state_alarm(void)
 			return STATE_button_down_cancel;
 		}
 		
-		t = time_diff(&s);
+		t = st_diff(&s);
 		if (t > lt) {
 			lt = t + SEC_MICRO;
 			set_lamp_brightness(get_lamp_brightness() - 1);
@@ -449,45 +488,61 @@ state_t
 state_button_down(void)
 {
 	uint32_t lt, t;
-	struct time s;
+	uint8_t h, m;
+	struct st s;
+	bool on;
 	
 	lt = 0;
-	get_time(&s);
+	init_st(&s);
 	
 	/* Turn on. */
 	set_lamp_brightness(0xff);
+	set_display_state(true);
+	
+	get_time(&h, &m);
+	
+	display_draw(true, 
+	             h / 10, h % 10,
+	             m / 10, m % 10);
+	             
 	do {
 		if (!button_down) {
 			return STATE_on;
 		}
 		
-		t = time_diff(&s);
+		t = st_diff(&s);
 	} while (t < 1 * SEC_MICRO);
 	
 	/* Cancel. */
 	set_lamp_brightness(0);
+	set_display_state(false);
+	
 	do {
 		if (!button_down) {
 			return STATE_wait;
 		}
 		
-		t = time_diff(&s);
+		t = st_diff(&s);
 	} while (t < 2 * SEC_MICRO);
 	
 	/* Set alarm. */
+	set_lamp_brightness(0xff);
+	on = true;
+	set_display_state(on);
+	
 	lt = 0;
 	do {
 		if (t > lt) {
 			lt = t + SEC_MICRO / 4;
-			set_lamp_brightness(
-			    get_lamp_brightness() > 0 ? 0 : 0xff);
+			on = !on;
+			set_display_state(on);
 		}
 	
 		if (!button_down) {
 			return STATE_set_alarm;
 		}
 		
-		t = time_diff(&s);
+		t = st_diff(&s);
 	} while (t < 4 * SEC_MICRO);
 	
 	/* Set time. */
@@ -495,140 +550,147 @@ state_button_down(void)
 	do {
 		if (t > lt) {
 			lt = t + SEC_MICRO / 8;
-			set_lamp_brightness(
-			    get_lamp_brightness() > 0 ? 0 : 0xff);
+			on = !on;
+			set_display_state(on);
 		}
 	
 		if (!button_down) {
 			return STATE_set_time;
 		}
 		
-		t = time_diff(&s);
+		t = st_diff(&s);
 	} while (t < 6 * SEC_MICRO);
 	
 	return STATE_button_down_cancel;
 }
 
-int
-get_hour_minutes_button_down(int rate)
-{
-	uint32_t lt, t;
-	struct time s;
-	
-	lt = 0;
-	get_time(&s);
-	
-	/* Short. */
-	do {
-		if (!button_down) {
-			return 0;
-		}
-		
-		t = time_diff(&s);
-		if (t > lt) {
-			lt = t + SEC_MICRO / rate;
-			
-			/* Should flash display instead of lamp. */
-			set_lamp_brightness(
-			    get_lamp_brightness() > 0 ? 0 : 0xff);
-		}
-	} while (t < 1 * SEC_MICRO);
-	
-	/* Should set display to full on. */
-	set_lamp_brightness(0xff);
-	
-	/* Long. */
-	do {
-		if (!button_down) {
-			return 1;
-		}
-		
-		t = time_diff(&s);
-	} while (t < 5 * SEC_MICRO);
-	
-	/* Cancel */
-	
-	/* Should turn display off. */
-	set_lamp_brightness(0);
-	while (button_down)
-		;
-	
-	return 2;
-}
-
 bool
-get_hour_minutes_value(uint8_t *v, uint8_t rate, bool ishour)
+get_setting_hour_minutes_value(uint8_t *h, uint8_t *m, uint8_t rate, bool ishour)
 {
 	uint32_t lt, t;
-	struct time s;
+	struct st s;
+	bool on;
 	
 	lt = 0;
-	get_time(&s);
-	*v = 0;
+	init_st(&s);
+	
+	on = true;
+	set_display_state(true);
 	
 	while (true) {
 		if (button_down) {
-			switch (get_hour_minutes_button_down(rate)) {
-			case 0:
-				*v = (*v + 1) % (ishour ? 24 : 60);
-				break;
-			case 1:
-				return true;
-			case 2:
-				return false;
+			init_st(&s);
+			lt = 0;
+			
+			while (true) {
+				t = st_diff(&s);
+				if (t > lt) {
+					lt = t + SEC_MICRO / rate;
+					
+					on = !on;
+					if (on) {
+						display_draw(true, 
+						             *h / 10, *h % 10,
+						             *m / 10, *m % 10);
+						             				            
+					} else if (!ishour || lt > SEC_MICRO * 3) {
+						display_draw(true, 
+						             *h / 10, *h % 10,
+						             0x10, 0x10);
+						             
+					} else {
+						display_draw(true, 
+						             0x10, 0x10,
+						             *m / 10, *m % 10);
+						             
+					}
+				}
+				
+				if (!button_down) {
+					if (t < SEC_MICRO) {
+						break;
+					} else if (t <= SEC_MICRO * 3) {
+						return true;
+					} else {
+						return false;
+					}
+				}
 			}
 			
-			get_time(&s);
+			if (ishour) {
+				*h = (*h + 1) % 24;
+			} else {
+				*m = (*m + 1) % 60;
+			}
+			
+			init_st(&s);
 			lt = 0;
 		}
 		
-		t = time_diff(&s);
+		t = st_diff(&s);
 		if (t > lt) {
 			lt = t + SEC_MICRO / rate;
 			
-			/* Should flash display instead of lamp.
-			 * Either high two if hour is true or low two. */
-			set_lamp_brightness(
-			    get_lamp_brightness() > 0 ? 0 : 0xff);
-			    
+			on = !on;
+			if (on) {
+				display_draw(true, 
+				             *h / 10, *h % 10,
+				             *m / 10, *m % 10);
+				             				            
+			} else if (ishour) {
+				display_draw(true, 
+				             0x10, 0x10,
+				             *m / 10, *m % 10);
+				             
+			} else {
+				display_draw(true, 
+				             *h / 10, *h % 10,
+				             0x10, 0x10);
+			}
+			
 		} else if (t > 60 * SEC_MICRO) {
 			return false;
 		}
 	}
 }
 
+
 bool
-get_hour_minutes(uint8_t *hour, uint8_t *minute, uint8_t rate)
+get_setting_hour_minutes(uint8_t *h, uint8_t *m, uint8_t rate)
 {
-	if (!get_hour_minutes_value(hour, rate, true)) {
+	if (!get_setting_hour_minutes_value(h, m, rate, true)) {
 		return false;
+	} else {
+		return get_setting_hour_minutes_value(h, m, rate, false);
 	}
-	
-	return get_hour_minutes_value(minute, rate, false);
 }
 
 state_t
 state_set_alarm(void)
 {
-	uint8_t hour, minute;
+	uint8_t h, m;
+		
+	get_time(&h, &m);
 	
-	if (get_hour_minutes(&hour, &minute, 4)) {
-		/* Do something. */
+	if (get_setting_hour_minutes(&h, &m, 4)) {
+		set_time(h, m);
 	}
 	
-	return STATE_wait;
+	return STATE_on;
 }
 
 state_t
 state_set_time(void)
 {
-	uint8_t hour, minute;
+	uint8_t h, m;
+		
+	get_time(&h, &m);
 	
-	if (get_hour_minutes(&hour, &minute, 8)) {
-		/* Do something. */
+	if (get_setting_hour_minutes(&h, &m, 4)) {
+		set_alarm(h, m);
 	}
 	
-	return STATE_wait;
+	return STATE_on;
 }
 
 state_t
@@ -639,6 +701,7 @@ state_wait(void)
 	
 	} else {
 		set_lamp_brightness(0);
+		set_display_state(false);
 	
 		return STATE_wait;
 	}
@@ -660,66 +723,14 @@ main(void)
 	state_t s;
 	
 	DDRB |= LAMP;
+	PORTB |= BUTTON;
 	
 	init_timers();
-	
-	sei();
-	
-	int i;
-	for (i = 0; i < 5; i++) {
-		set_lamp_brightness(0xff);
-		
-		delay(100000);
-	
-		set_lamp_brightness(0);
-		
-		delay(100000);
-	}
-	
-	set_lamp_brightness(0xff);
-	
 	init_display();
 	
-	delay(1500);
-		
-	uint8_t a, b, c, d;
-	int j;
-			
-	display_on();
-	i = 0;
-	while (true) {
-		j = i++;
-		d = j % 16;
-		j /= 16;
-		c = j % 16;
-		j /= 16;
-		b = j % 16;
-		j /= 16;
-		a = j % 16;
-		
-		display_draw(i % 2 == 0, a, b, c, d);
-		
-		if (i % 10 == 0) {
-			display_on();
-		} else if (i % 5 == 0) {
-			display_off();
-		}
-		
-		delay(500000);
-	}
-			
-	while (true) {
-	
-		set_lamp_brightness(0xff);
-		
-		delay(1000000);
-	
-		set_lamp_brightness(0);
-		
-		delay(1000000);
-	}
-	
 	sei();
+	delay(1500);
+	
 	s = STATE_wait;
 	while (true) {
 		s = states[s]();
