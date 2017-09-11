@@ -156,6 +156,10 @@ state_alarm(void)
 	uint8_t th, tm, ah, am;	
 	uint32_t td;
 	
+	if (button_down) {
+		return STATE_button_down_cancel;
+	}
+	
 	get_time(&th, &tm);
 	get_alarm(&ah, &am);
 	
