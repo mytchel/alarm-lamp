@@ -34,7 +34,9 @@ void
 init_display(void);
 
 void
-display_draw(bool sep, uint8_t a, uint8_t b, uint8_t c, uint8_t d);
+display_draw(bool sep, 
+             uint8_t a, uint8_t b, 
+             uint8_t c, uint8_t d);
 
 void
 set_display_state(bool on);
@@ -45,8 +47,10 @@ get_display_state(void);
 void
 init_i2c(void);
 
-int
-i2c_send(char *data, int len);
+bool
+i2c_message(uint8_t addr,
+            uint8_t *sdata, int slen,
+            uint8_t *rdata, int rlen);
 
 void
 delay(uint32_t t);
@@ -62,3 +66,6 @@ get_time(uint8_t *h, uint8_t *m);
 
 void
 get_alarm(uint8_t *h, uint8_t *m);
+
+void
+clock_test(void);

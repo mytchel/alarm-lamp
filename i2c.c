@@ -2,121 +2,103 @@
 #include <stdbool.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <util/twi.h>
 
 #include "lamp.h"
 
 void
 init_i2c(void)
 {
-	PORT_SDA |= (1<<SDA_PIN_N);
-	PORT_SCL |= (1<<SCL_PIN_N);
-	
-	DDR_SDA |= (1<<SDA_PIN_N);
-	DDR_SCL |= (1<<SCL_PIN_N);
-	
-	USIDR = 0xff;
-	USICR = (1<<USIWM1)|(1<<USICLK);
-	
-	USISR = (1<<USISIF)|(1<<USIOIF)|
-	        (1<<USIPF)|(1<<USIDC);
+	TWSR = 0;
+	TWBR = 22;
 }
 
-char
-i2c_transfer(bool byte)
+bool
+i2c_message(uint8_t addr,
+            uint8_t *sdata, int slen,
+            uint8_t *rdata, int rlen)
 {
-	char d = (1<<USISIF)|(1<<USIOIF)|
-	         (1<<USIPF)|(1<<USIDC);
-	        
-	if (byte) {
-		USISR = d | 0;
-	} else {
-		USISR = d | 0xe;
+	int i;
+	
+	set_lamp_brightness(0);
+	
+	TWCR = (1<<TWINT)|(1<<TWSTA)|(1<<TWEN);
+	
+	while (!(TWCR & (1<<TWINT)))
+		;
+	
+	if ((TWSR & 0xf8) != TW_START) {
+		set_lamp_brightness(0xff);
+		return false;
 	}
 	
-	d = (1<<USIWM1)|(1<<USICLK)|(1<<USITC);
-	
-	do {
-		USICR = d;
-		while (!(PIN_SCL & (1<<SCL_PIN_N)))
+	if (slen > 0) {
+		TWDR = (addr << 1);
+		TWCR = (1<<TWINT)|(1<<TWEN);
+		
+		while (!(TWCR & (1<<TWINT)))
 			;
-		delay(50);
-		USICR = d;
-	} while (!(USISR & (1<<USIOIF)));
-
-	delay(50);
-	d = USIDR;
-	USIDR = 0xff;
-	DDR_SDA |= (1<<SDA_PIN_N);
-	
-	return d;
-}
-
-int
-i2c_send(char *data, int len)
-{
-	bool addr = true, write;
-	
-	write = !(data[0] & 1);
-	
-	/* Start */
-	
-	PORT_SCL |= (1<<SCL_PIN_N);
-	while (!(PIN_SCL & (1<<SCL_PIN_N)))
-		;
-	
-	delay(50);
-	
-	PORT_SDA &= ~(1<<SDA_PIN_N);
-	delay(50);
-	
-	PORT_SCL &= ~(1<<SCL_PIN_N);
-	PORT_SDA |= (1<<SDA_PIN_N);
-	
-	if (!(USISR & (1<<USISIF))) {
-		return 1;
-	}
-	
-	do {
-		if (addr || write) {
-			PORT_SCL &= ~(1<<SCL_PIN_N);
-			USIDR = *(data++);
-			
-			i2c_transfer(true);
-			
-			DDR_SDA &= ~(1<<SDA_PIN_N);
-			if (i2c_transfer(false) & 1) {
-				return 2;
-			}
-			
-			addr = false;
-		} else {
-			DDR_SDA &= ~(1<<SDA_PIN_N);
-			*(data++) = i2c_transfer(true);
-			
-			if (len == 1) {
-				USIDR = 0xff; /* End of transmisison. */
-			} else {
-				USIDR = 0x00; /* Ack. */
-			}
-			
-			i2c_transfer(false);
+		
+		if ((TWSR & 0xf8) != TW_MT_SLA_ACK) {
+			return false;
 		}
-	} while (len-- > 0);
-	
-	/* Stop */
-	
-	PORT_SDA &= ~(1<<SDA_PIN_N);
-	PORT_SCL |= (1<<SCL_PIN_N);
-	while (!(PIN_SCL & (1<<SCL_PIN_N)))
-		;
-	
-	delay(50);
-	PORT_SDA |= (1<<SDA_PIN_N);
-	delay(50);
-	
-	if (!(USISR & (1<<USIPF))) {
-		return 3;
+		
+		for (i = 0; i < slen; i++) {
+			TWDR = sdata[i];
+			TWCR = (1<<TWINT)|(1<<TWEN);
+			
+			while (!(TWCR & (1<<TWINT)))
+				;
+		
+			if ((TWSR & 0xf8) != TW_MT_DATA_ACK) {
+				return false;
+			}
+		}
+		
+		if (rlen > 0) {
+			TWCR = (1<<TWINT)|(1<<TWSTA)|(1<<TWEN);
+			
+			while (!(TWCR & (1<<TWINT)))
+				;
+			
+			if ((TWSR & 0xf8) != TW_START) {
+				return false;
+			}
+		}
 	}
 	
-	return 0;
+	if (rlen > 0) {
+		TWDR = (addr << 1) | 1;
+		TWCR = (1<<TWINT)|(1<<TWEN);
+		
+		while (!(TWCR & (1<<TWINT)))
+			;
+		
+		if ((TWSR & 0xf8) != TW_MR_SLA_ACK) {
+			return false;
+		}
+		
+		for (i = 0; i < rlen; i++) {
+			if (i + 1 < rlen) {
+				TWCR = (1<<TWINT)|(1<<TWEN);
+			} else {
+				TWCR = (1<<TWINT)|(1<<TWEA)|(1<<TWEN);
+			}
+			
+			while (!(TWCR & (1<<TWINT)))
+				;
+			
+			if (i + 1 < rlen && (TWSR & 0xf8) != TW_MR_DATA_NACK) {
+				return false;
+			} else if ((TWSR & 0xf8) != TW_MR_DATA_ACK) {
+				return false;
+			}
+				
+			rdata[i] = TWDR;
+		}
+	}
+	
+	TWCR = (1<<TWINT)|(1<<TWEN)|(1<<TWSTO);
+	
+	return true;
 }

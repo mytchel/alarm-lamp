@@ -153,62 +153,23 @@ state_on(void)
 state_t
 state_alarm(void)
 {
-	uint32_t lt, t;
-	uint8_t h, m;
-	struct st s;
+	uint8_t th, tm, ah, am;	
 	
-	lt = 0;
-	init_st(&s);
-	
-	set_lamp_brightness(0);
-	
-	get_time(&h, &m);
+	get_time(&th, &tm);
+	get_alarm(&ah, &am);
 	
 	set_display_state(true);
 	display_draw(true, 
-	             h / 10, h % 10,
-	             m / 10, m % 10);
-	
-	/* Fade on. */
-	
-	lt = 0;
-	while (get_lamp_brightness() < 0xff) {
-		if (button_down) {
-			return STATE_button_down_cancel;
-		}
+	             th / 10, th % 10,
+	             tm / 10, tm % 10);
 		
-		t = st_diff(&s);
-		if (t > lt) {
-			lt = t + SEC_MICRO;
-			set_lamp_brightness(get_lamp_brightness() + 1);
-		}
+	set_lamp_brightness(0xff);
+	
+	if (tm - am > 30) {
+		return STATE_wait;
+	} else {
+		return STATE_alarm;
 	}
-	
-	/* Full for some time. */
-	do {
-		if (button_down) {
-			return STATE_button_down_cancel;
-		}
-		
-		t = st_diff(&s);
-	} while (t < ALARM_LENGTH * 60 * SEC_MICRO);
-	
-	/* Fade off. */
-	
-	lt = 0;
-	while (get_lamp_brightness() > 0) {
-		if (button_down) {
-			return STATE_button_down_cancel;
-		}
-		
-		t = st_diff(&s);
-		if (t > lt) {
-			lt = t + SEC_MICRO;
-			set_lamp_brightness(get_lamp_brightness() - 1);
-		}
-	}
-		
-	return STATE_wait;
 }
 
 state_t
@@ -460,9 +421,12 @@ main(void)
 	
 	init_timers();
 	init_display();
-//	init_i2c();
+	init_i2c();
 	
 	sei();	
+	
+	clock_test();
+	
 	s = STATE_wait;
 	while (true) {
 		s = states[s]();

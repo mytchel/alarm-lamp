@@ -1,4 +1,4 @@
-CLOCK = 1000000UL
+CLOCK = 6000000UL
 
 CFLAGS = -Wall -O0
 CFLAGS += -mmcu=atmega328 -DF_CPU=$(CLOCK)
@@ -10,7 +10,7 @@ CC = avr-gcc
 OBJCOPY = avr-objcopy
 OBJDUMP = avr-objdump
 
-SRC = main.c display.c clock.c
+SRC = main.c display.c clock.c i2c.c
 OBJ = $(SRC:%.c=%.o)
 
 .SUFFIXES:
