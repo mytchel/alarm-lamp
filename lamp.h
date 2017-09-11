@@ -1,24 +1,24 @@
 
 
-#define LAMP_PIN_N  1
+#define LAMP_PIN_N  0
 #define DDR_LAMP    DDRB
 #define PIN_LAMP    PINB
 #define PORT_LAMP   PORTB
 
-#define BUTTON_PIN_N  4
+#define BUTTON_PIN_N  2
 #define DDR_BUTTON    DDRB
 #define PIN_BUTTON    PINB
 #define PORT_BUTTON   PORTB
 
-#define DIO_PIN_N  0
-#define DDR_DIO    DDRB
-#define PIN_DIO    PINB
-#define PORT_DIO   PORTB
+#define DIO_PIN_N  6
+#define DDR_DIO    DDRD
+#define PIN_DIO    PIND
+#define PORT_DIO   PORTD
 
-#define DCK_PIN_N  2
-#define DDR_DCK    DDRB
-#define PIN_DCK    PINB
-#define PORT_DCK   PORTB
+#define DCK_PIN_N  7
+#define DDR_DCK    DDRD
+#define PIN_DCK    PIND
+#define PORT_DCK   PORTD
 
 #define SDA_PIN_N  8
 #define DDR_SDA    DDRB

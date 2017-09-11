@@ -3,14 +3,14 @@ CLOCK = 1000000UL
 CFLAGS = -Wall -O0
 CFLAGS += -mmcu=atmega328 -DF_CPU=$(CLOCK)
 
-LDFLAGS = 
+LDFLAGS = -mmcu=atmega328
 
 AVRDUDE = avrdude -c usbtiny -p m328
 CC = avr-gcc
 OBJCOPY = avr-objcopy
 OBJDUMP = avr-objdump
 
-SRC = main.c display.c clock.c i2c.c
+SRC = main.c display.c clock.c
 OBJ = $(SRC:%.c=%.o)
 
 .SUFFIXES:

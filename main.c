@@ -14,7 +14,7 @@
 /* Order of parts matters, otherwise the operation is not
  * done right due to 32bit limit. I think. */
 #define TIMER0_OVF_period \
-    (((SEC_MICRO * 256UL) / F_CPU) * 1UL)
+    (((SEC_MICRO * 256UL) / F_CPU) * 8UL)
 
 struct st {
 	uint32_t u, s;
@@ -40,27 +40,20 @@ typedef enum {
 void
 init_timers(void)
 {
-	TCCR1 |= (1<<CS13);
-		
-	TCCR0B |= (1<<CS00);
-	TCNT0 = 0;
-	
-	TIMSK |= (1<<TOIE0);
+	TCCR0B |= (1<<CS01);
+	TIMSK0 |= (1<<TOIE0)|(1<<OCIE0A);
 }
 
 ISR(TIMER0_OVF_vect)
 {
 	static uint32_t button_count = 0;
 	
-	/* Time keeping. */
 	st.u += TIMER0_OVF_period;
-	
 	if (st.u >= SEC_MICRO) {
 		st.u -= SEC_MICRO;
 		st.s++;
 	}
 	
-	/* Button debouncing. */
 	if ((PIN_BUTTON & (1<<BUTTON_PIN_N)) && button_down) {
 		if (button_count++ == BUTTON_DEBOUNCE) {
 			button_down = false;
@@ -72,6 +65,37 @@ ISR(TIMER0_OVF_vect)
 	} else {
 		button_count = 0;
 	}
+	
+	if (0 < lamp_brightness && lamp_brightness < 0xff) {
+		PORT_LAMP |= (1<<LAMP_PIN_N);
+		OCR0A = lamp_brightness;
+	}
+}
+
+ISR(TIMER0_COMPA_vect)
+{
+	if (0 < lamp_brightness && lamp_brightness < 0xff) {
+		PORT_LAMP &= ~(1<<LAMP_PIN_N);
+	}
+}
+
+void
+set_lamp_brightness(uint8_t b)
+{
+	lamp_brightness = b;
+	
+	if (b == 0) {
+		PORT_LAMP &= ~(1<<LAMP_PIN_N);
+		
+	} else if (b == 0xff) {
+		PORT_LAMP |= (1<<LAMP_PIN_N);
+	}
+}
+
+uint8_t
+get_lamp_brightness(void)
+{
+	return lamp_brightness;
 }
 
 uint32_t
@@ -96,41 +120,6 @@ delay(uint32_t t)
 	init_st(&s);
 	while (st_diff(&s) < t)
 		;
-}
-
-ISR(TIMER1_OVF_vect)
-{
-	PORT_LAMP |= (1<<LAMP_PIN_N);
-	OCR1A = lamp_brightness;
-}
-
-ISR(TIMER1_COMPA_vect)
-{
-	PORT_LAMP &= ~(1<<LAMP_PIN_N);
-}
-
-void
-set_lamp_brightness(uint8_t b)
-{
-	lamp_brightness = b;
-	
-	if (b == 0) {
-		PORT_LAMP &= ~(1<<LAMP_PIN_N);
-		TIMSK &= ~((1<<TOIE1)|(1<<OCIE1A));
-		
-	} else if (b == 0xff) {
-		PORT_LAMP |= (1<<LAMP_PIN_N);
-		TIMSK &= ~((1<<TOIE1)|(1<<OCIE1A));
-		
-	} else {
-		TIMSK |= (1<<TOIE1)|(1<<OCIE1A);
-	}
-}
-
-uint8_t
-get_lamp_brightness(void)
-{
-	return lamp_brightness;
 }
 
 state_t
@@ -471,11 +460,9 @@ main(void)
 	
 	init_timers();
 	init_display();
-	init_i2c();
+//	init_i2c();
 	
-	sei();
-	delay(1500);
-	
+	sei();	
 	s = STATE_wait;
 	while (true) {
 		s = states[s]();
