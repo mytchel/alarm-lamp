@@ -145,8 +145,8 @@ state_on(void)
 	             h / 10, h % 10,
 	             m / 10, m % 10);
 	
-	return button_down ? 
-	      STATE_button_down_cancel
+	return button_down 
+	    ? STATE_button_down
 	    : STATE_on;
 }
 
@@ -190,7 +190,9 @@ state_button_down(void)
 	lt = 0;
 	init_st(&s);
 	
-	/* Turn on. */
+	/* Turn on or cancel. */
+	
+	on = get_lamp_brightness() == 0;
 	set_lamp_brightness(0xff);
 	set_display_state(true);
 	
@@ -202,29 +204,15 @@ state_button_down(void)
 	             
 	do {
 		if (!button_down) {
-			return STATE_on;
+			return on ? STATE_on : STATE_wait;
 		}
 		
 		t = st_diff(&s);
 	} while (t < 1 * SEC_MICRO);
-	
-	/* Cancel. */
-	set_lamp_brightness(0);
-	set_display_state(false);
-	
-	do {
-		if (!button_down) {
-			return STATE_wait;
-		}
 		
-		t = st_diff(&s);
-	} while (t < 2 * SEC_MICRO);
-	
-	set_lamp_brightness(0xff);
-	on = false;
-	lt = 0;
-	
 	/* Set time. */
+	lt = 0;
+	on = false;
 	
 	do {
 		if (t > lt) {
