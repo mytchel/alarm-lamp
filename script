@@ -1,8 +1,0 @@
-
-sed "s/DDRB |= $1/DDR_$1 |= (1<<$1_PIN_N)/" | \
-sed "s/DDRB &= ~$1/DDR_$1 \&= ~(1<<$1_PIN_N)/" | \
-sed "s/PORTB |= $1/PORT_$1 |= (1<<$1_PIN_N)/" | \
-sed "s/PORTB &= ~$1/PORT_$1 \&= ~(1<<$1_PIN_N)/" | \
-sed "s/PINB |= $1/PIN_$1 |= (1<<$1_PIN_N)/" | \
-sed "s/PINB &= ~$1/PIN_$1 \&= ~(1<<$1_PIN_N)/" | \
-sed "s/PINB & $1/PIN_$1 \& (1<<$1_PIN_N)/"

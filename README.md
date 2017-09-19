@@ -1,10 +1,10 @@
-# Fuses
+# Alarm Lamp
 
-We are using an external 6MHz crystal clock so you need to 
-set the low fuse byte to 0xFD. I do not understand how the 
-fuses work so I fucked on chip by setting it to what would 
-make sense to me but is not correct. The fuses bits do not
-seem to work as high or low but as programmed or unprogrammed.
-I do not know how to unprogram it. Second attempt worked.
+Here is the code for a alarm lamp. It has a TM1637 four digit display
+used as a clock, a DS1307 real time clock to keep time, and a LED
+strip salvaged from a TV's backlight.
 
-Use [fusecalc](http://www.engbedded.com/fusecalc).
+With these it keeps time and turns the LED strip on at a set time
+every day. The idea is that this should wake me up. In reality it
+doesn't do much more than motivate me to get out of be when I do
+wake up.

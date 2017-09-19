@@ -1,0 +1,281 @@
+EESchema Schematic File Version 2  date Tue Sep 19 19:52:32 2017
+LIBS:power
+LIBS:device
+LIBS:transistors
+LIBS:conn
+LIBS:linear
+LIBS:regul
+LIBS:74xx
+LIBS:cmos4000
+LIBS:adc-dac
+LIBS:memory
+LIBS:xilinx
+LIBS:special
+LIBS:microcontrollers
+LIBS:dsp
+LIBS:microchip
+LIBS:analog_switches
+LIBS:motorola
+LIBS:texas
+LIBS:intel
+LIBS:audio
+LIBS:interface
+LIBS:digital-audio
+LIBS:philips
+LIBS:display
+LIBS:cypress
+LIBS:siliconi
+LIBS:opto
+LIBS:atmel
+LIBS:contrib
+LIBS:valves
+LIBS:noname-cache
+EELAYER 24  0
+EELAYER END
+$Descr A4 11700 8267
+Sheet 1 1
+Title ""
+Date "19 sep 2017"
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+NoConn ~ 7400 5500
+NoConn ~ 7400 5400
+NoConn ~ 7400 5200
+NoConn ~ 7400 5100
+NoConn ~ 7400 5000
+NoConn ~ 7400 4900
+NoConn ~ 7400 4800
+NoConn ~ 7400 4600
+NoConn ~ 7400 4500
+NoConn ~ 7400 4400
+NoConn ~ 7400 4300
+NoConn ~ 7400 4000
+NoConn ~ 7400 3500
+NoConn ~ 7400 3400
+NoConn ~ 7400 3300
+NoConn ~ 7400 3200
+NoConn ~ 7400 3100
+NoConn ~ 7400 3000
+NoConn ~ 7400 2800
+NoConn ~ 7400 2700
+NoConn ~ 7400 2600
+NoConn ~ 7400 2500
+NoConn ~ 7400 2400
+NoConn ~ 7400 2300
+NoConn ~ 7400 2200
+NoConn ~ 7400 2100
+Wire Wire Line
+	8800 2750 8050 2750
+Wire Wire Line
+	8050 2750 8050 4100
+Wire Wire Line
+	8050 4100 7400 4100
+Connection ~ 8300 1900
+Wire Wire Line
+	8300 2550 8300 1800
+Wire Wire Line
+	8300 2550 8800 2550
+Wire Wire Line
+	7400 3900 7950 3900
+Wire Wire Line
+	7950 3900 7950 2200
+Wire Wire Line
+	7950 2200 8850 2200
+Connection ~ 8200 6050
+Wire Wire Line
+	8850 2000 8600 2000
+Wire Wire Line
+	8600 2000 8600 6050
+Wire Wire Line
+	8600 6050 6450 6050
+Wire Wire Line
+	7400 5300 7650 5300
+Wire Wire Line
+	7650 5300 7650 3000
+Wire Wire Line
+	7650 3000 2050 3000
+Wire Wire Line
+	8200 5450 8200 3600
+Wire Wire Line
+	8200 3600 7400 3600
+Wire Wire Line
+	4950 2850 5400 2850
+Wire Wire Line
+	5400 2850 5400 2650
+Connection ~ 6350 5800
+Wire Wire Line
+	2250 5800 2250 1900
+Wire Wire Line
+	2250 5800 6450 5800
+Wire Wire Line
+	2650 1600 6450 1600
+Wire Wire Line
+	6450 1600 6450 1800
+Connection ~ 6350 1600
+Connection ~ 1750 1600
+Wire Wire Line
+	1750 2400 1750 1600
+Wire Wire Line
+	1050 1450 1050 1600
+Wire Wire Line
+	1050 1600 1850 1600
+Wire Wire Line
+	2250 1900 1050 1900
+Wire Wire Line
+	1050 1900 1050 2100
+Wire Wire Line
+	6350 1600 6350 1800
+Wire Wire Line
+	4950 2250 5400 2250
+Wire Wire Line
+	5400 2250 5400 2500
+Wire Wire Line
+	6450 5800 6450 6050
+Wire Wire Line
+	1750 3200 1750 3450
+Wire Wire Line
+	1750 3450 2250 3450
+Connection ~ 2250 3450
+Wire Wire Line
+	8300 1900 8850 1900
+Wire Wire Line
+	6450 1800 8300 1800
+Wire Wire Line
+	8850 2100 7850 2100
+Wire Wire Line
+	7850 2100 7850 3700
+Wire Wire Line
+	7850 3700 7400 3700
+Wire Wire Line
+	8800 2450 8600 2450
+Connection ~ 8600 2450
+Wire Wire Line
+	8800 2650 8150 2650
+Wire Wire Line
+	8150 2650 8150 4200
+Wire Wire Line
+	8150 4200 7400 4200
+NoConn ~ 8800 2850
+Text Label 8800 2750 0    60   ~ 0
+SCL
+Text Label 8800 2650 0    60   ~ 0
+SDA
+Text Label 8800 2450 0    60   ~ 0
+GND
+Text Label 8800 2550 0    60   ~ 0
+PWD
+Text Label 8850 2200 0    60   ~ 0
+DCK
+Text Label 8850 2100 0    60   ~ 0
+DIO
+Text Label 8850 2000 0    60   ~ 0
+GND
+Text Label 8850 1900 0    60   ~ 0
+PWD
+$Comp
+L CONN_5 P2
+U 1 1 59C0CBA0
+P 9200 2650
+F 0 "P2" V 9150 2650 50  0000 C CNN
+F 1 "DS1307" V 9250 2650 50  0000 C CNN
+	1    9200 2650
+	1    0    0    -1  
+$EndComp
+$Comp
+L CONN_4 P1
+U 1 1 59C0CB9D
+P 9200 2050
+F 0 "P1" V 9150 2050 50  0000 C CNN
+F 1 "TM1637" V 9250 2050 50  0000 C CNN
+	1    9200 2050
+	1    0    0    -1  
+$EndComp
+$Comp
+L TIP122 Q?
+U 1 1 59C0C9A7
+P 1850 3000
+F 0 "Q?" H 2100 3075 50  0000 L CNN
+F 1 "TIP122" H 2100 3000 50  0000 L CNN
+F 2 "TO_SOT_Packages_THT:TO-220_Vertical" H 2100 2925 50  0001 L CIN
+	1    1850 3000
+	-1   0    0    -1  
+$EndComp
+$Comp
+L SW_PUSH SW?
+U 1 1 59C0C89B
+P 8200 5750
+F 0 "SW?" H 8350 5860 50  0000 C CNN
+F 1 "SW_PUSH" H 8200 5670 50  0000 C CNN
+	1    8200 5750
+	0    1    1    0   
+$EndComp
+$Comp
+L CRYSTAL X1
+U 1 1 59C0C855
+P 4950 2550
+F 0 "X1" H 4950 2700 60  0000 C CNN
+F 1 "6MHz" H 4950 2400 60  0000 C CNN
+	1    4950 2550
+	0    1    1    0   
+$EndComp
+$Comp
+L R 1
+U 1 1 59C0C806
+P 5400 1850
+F 0 "1" V 5480 1850 50  0000 C CNN
+F 1 "1k" V 5400 1850 50  0000 C CNN
+	1    5400 1850
+	1    0    0    -1  
+$EndComp
+$Comp
+L LED D?
+U 1 1 59C0C671
+P 1750 2600
+F 0 "D?" H 1750 2700 50  0000 C CNN
+F 1 "LED" H 1750 2500 50  0000 C CNN
+	1    1750 2600
+	0    1    1    0   
+$EndComp
+$Comp
+L LM7805 U1
+U 1 1 59C0C637
+P 2250 1650
+F 0 "U1" H 2400 1454 60  0000 C CNN
+F 1 "LM7805" H 2250 1850 60  0000 C CNN
+	1    2250 1650
+	1    0    0    -1  
+$EndComp
+$Comp
+L GND #PWR?
+U 1 1 59C0C56F
+P 1050 2100
+F 0 "#PWR?" H 1050 2100 30  0001 C CNN
+F 1 "GND" H 1050 2030 30  0001 C CNN
+	1    1050 2100
+	1    0    0    -1  
+$EndComp
+$Comp
+L VSS #PWR?
+U 1 1 59C0C566
+P 1050 1450
+F 0 "#PWR?" H 1050 1450 30  0001 C CNN
+F 1 "VSS" H 1050 1380 30  0000 C CNN
+	1    1050 1450
+	-1   0    0    1   
+$EndComp
+$Comp
+L ATMEGA32-P IC1
+U 1 1 59C0C528
+P 6400 3800
+F 0 "IC1" H 5600 5630 50  0000 L BNN
+F 1 "ATMEGA328-P" H 6600 1900 50  0000 L BNN
+F 2 "DIL40" H 6875 1825 50  0001 C CNN
+	1    6400 3800
+	1    0    0    -1  
+$EndComp
+$EndSCHEMATC
